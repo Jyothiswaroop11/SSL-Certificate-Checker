@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSL Certificate Checker</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+      [x-cloak] { display: none !important; }
+      .dark { background-color: #1a202c; color: #e2e8f0; }
+      .dark .bg-white { background-color: #2d3748; }
+      .dark .text-gray-700 { color: #e2e8f0; }
+      .dark .bg-gray-100 { background-color: #4a5568; }
+      .dark .border-gray-200 { border-color: #4a5568; }
+      .dark .text-gray-600 { color: #cbd5e0; }
+      .dark .text-gray-800 { color: #f7fafc; }
+      .dark input, .dark select { background-color: #4a5568; color: #e2e8f0; border-color: #718096; }
+      .dark .hover\:bg-gray-50:hover { background-color: #4a5568; }
+      .dark .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+      .pass { background-color: #10B981; color: white; }
+      .fail { background-color: #EF4444; color: white; }
+      .dark .pass { background-color: #059669; }
+      .dark .fail { background-color: #DC2626; }
+    </style>
+  </head>
+  <body x-data="app()" x-init="init()" :class="{ 'dark': darkMode }" class="min-h-screen transition-colors duration-200 bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+      <h1 class="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">SSL Certificate Checker</h1>
+      
+      <!-- Settings and Controls -->
+      <section aria-labelledby="settings-heading" class="mb-8">
+        <h2 id="settings-heading" class="sr-only">Settings and Controls</h2>
+        <div class="flex justify-between items-center">
+          <div>
+            <label for="fontSize" class="mr-2">Font Size:</label>
+            <input type="number" id="fontSize" x-model="fontSize" @input="changeFontSize()" min="7" max="50" class="border rounded px-2 py-1 w-16">
+            <span class="ml-1">px</span>
+          </div>
+          <div>
+            <label for="itemsPerPage" class="mr-2">Items per page:</label>
+            <select id="itemsPerPage" x-model="perPage" @change="updatePagination()" class="border rounded px-2 py-1">
+              <option>10</option>
+              <option>25</option>
+              <option>50</option>
+              <option>100</option>
+            </select>
+          </div>
+          <button @click="toggleDarkMode()" class="bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-bold py-2 px-4 rounded">
+            <i class="fas" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+            <span x-text="darkMode ? 'Light Mode' : 'Dark Mode'"></span>
+          </button>
+        </div>
+      </section>
+      
+      <!-- Form -->
+      <section aria-labelledby="form-heading">
+        <h2 id="form-heading" class="text-2xl font-bold mb-4">Certificate Check Form</h2>
+        <form @submit.prevent="submitForm" enctype="multipart/form-data" class="bg-white dark:bg-gray-800 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+          <div class="mb-4">
+            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="pass_name">Enter PASS_NAME:</label>
+            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="pass_name" name="pass_name" type="text" required x-model="passName" aria-describedby="passNameHelp">
+            <p id="passNameHelp" class="text-sm text-gray-600 dark:text-gray-400 mt-1">Enter the expected issuer name for SSL certificate validation.</p>
+          </div>
+          <div class="mb-6">
+            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="file">Upload File:</label>
+            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="file" name="file" type="file" accept=".csv, .xlsx" required aria-describedby="fileHelp" @change="handleFileChange">
+            <p id="fileHelp" class="text-sm text-gray-600 dark:text-gray-400 mt-1">Upload a CSV or Excel file containing URLs to check.</p>
+          </div>
+          <div class="mb-4" x-show="uploadProgress > 0">
+            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+              <div class="bg-blue-600 h-2.5 rounded-full" :style="'width: ' + uploadProgress + '%'"></div>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1" x-text="'Upload progress: ' + uploadProgress + '%'"></p>
+          </div>
+          <div class="flex items-center justify-between">
+            <button class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit" :disabled="isLoading">
+              <i class="fas" :class="isLoading ? 'fa-spinner fa-spin' : 'fa-upload'"></i>
+              <span x-text="isLoading ? 'Processing...' : 'Upload & Check SSL'"></span>
+            </button>
+            <button @click="clearResults" type="button" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+              <i class="fas fa-trash-alt mr-2"></i> Clear Results
+            </button>
+          </div>
+        </form>
+      </section>
+      
+      <!-- Error Messages -->
+      <div x-show="error" x-text="error" class="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-600 dark:text-red-300 px-4 py-3 rounded relative mb-4" role="alert"></div>
+      
+      <!-- Compare Certificates -->
+      <section aria-labelledby="compare-heading" x-show="selectedForComparison.length > 1" class="mt-8">
+        <h2 id="compare-heading" class="text-2xl font-bold mb-4">Compare Certificates</h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full bg-white dark:bg-gray-800 shadow-md rounded">
+            <thead>
+              <tr>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Field</th>
+                <template x-for="(id, index) in selectedForComparison" :key="id">
+                  <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600" x-text="'Certificate ' + (index + 1)"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="field in ['URLS', 'Modified URLS', 'Pass/Fail', 'Connection Time (ms)', 'Common Name', 'Issuer By', 'Issuer To', 'Valid From', 'Valid To']" :key="field">
+                <tr>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700 font-bold" x-text="field"></td>
+                  <template x-for="id in selectedForComparison" :key="id">
+                    <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="results.find(r => r['S.No'] == id)[field]"></td>
+                  </template>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section aria-labelledby="results-heading" x-show="results.length > 0" class="mt-8">
+        <h2 id="results-heading" class="text-2xl font-bold mb-4">Results:</h2>
+        <!-- Filters and Search -->
+        <div class="mb-4 flex justify-between items-center">
+          <div class="w-1/3">
+            <input x-model="search" @input="filterResults()" type="text" placeholder="Search URLs..." class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+          </div>
+          <div class="w-1/3">
+            <select x-model="status" @change="filterResults()" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+              <option value="">All Status</option>
+              <option value="Pass">Pass</option>
+              <option value="Fail">Fail</option>
+            </select>
+          </div>
+          <div class="w-1/3 flex justify-end space-x-2">
+            <button @click="downloadFile('excel')" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded relative" :disabled="isDownloading.excel">
+              <i class="fas fa-file-excel mr-2"></i>Excel
+              <span x-show="isDownloading.excel" class="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-50 rounded">
+                <i class="fas fa-circle-notch fa-spin"></i>
+              </span>
+            </button>
+            <button @click="downloadFile('csv')" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded relative" :disabled="isDownloading.csv">
+              <i class="fas fa-file-csv mr-2"></i>CSV
+              <span x-show="isDownloading.csv" class="absolute inset-0 flex items-center justify-center bg-green-500 bg-opacity-50 rounded">
+                <i class="fas fa-circle-notch fa-spin"></i>
+              </span>
+            </button>
+            <button @click="downloadFile('txt')" class="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded relative" :disabled="isDownloading.txt">
+              <i class="fas fa-file-alt mr-2"></i>TXT
+              <span x-show="isDownloading.txt" class="absolute inset-0 flex items-center justify-center bg-yellow-500 bg-opacity-50 rounded">
+                <i class="fas fa-circle-notch fa-spin"></i>
+              </span>
+            </button>
+            <button @click="resetCompare" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded" x-show="selectedForComparison.length > 0">
+              <i class="fas fa-undo mr-2"></i>Reset Compare
+            </button>
+          </div>
+        </div>
+        <!-- Results Table -->
+        <div class="overflow-x-auto">
+          <table class="min-w-full bg-white dark:bg-gray-800 shadow-md rounded">
+            <thead>
+              <tr>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Compare</th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                  <button @click="sortResults('S.No')" class="w-full text-left focus:outline-none">
+                    <b>S.No</b>
+                    <i class="fas" :class="sortColumn === 'S.No' ? (sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                  </button>
+                </th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                  <button @click="sortResults('URLS')" class="w-full text-left focus:outline-none">
+                    <b>URLS</b>
+                    <i class="fas" :class="sortColumn === 'URLS' ? (sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                  </button>
+                </th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                  <button @click="sortResults('Pass/Fail')" class="w-full text-left focus:outline-none">
+                    <b>Pass/Fail</b>
+                    <i class="fas" :class="sortColumn === 'Pass/Fail' ? (sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                  </button>
+                </th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                  <button @click="sortResults('Connection Time (ms)')" class="w-full text-left focus:outline-none">
+                    <b>Connection Time (ms)</b>
+                    <i class="fas" :class="sortColumn === 'Connection Time (ms)' ? (sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                  </button>
+                </th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Exception</th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Certificate Name</th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Issuer By</th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Issuer To</th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Valid From</th>
+                <th class="py-2 px-4 bg-gray-100 dark:bg-gray-700 font-bold uppercase text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Valid To</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(result, index) in paginatedResults" :key="index">
+                <tr :class="{ 'dark:bg-gray-900': index % 2 === 0 }">
+                    <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700">
+                        <input type="checkbox" :id="'compare-' + result['S.No']" :value="result['S.No']" x-model="selectedForComparison">
+                      </td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['S.No']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['URLS']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" :class="result['Pass/Fail'] === 'Pass' ? 'pass' : 'fail'" x-text="result['Pass/Fail']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['Connection Time (ms)']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['Exception']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['Common Name']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['Issuer By']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['Issuer To']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['Valid From']"></td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['Valid To']"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div class="mt-4 flex justify-between items-center">
+          <div>
+            <span x-text="'Showing ' + ((currentPage - 1) * perPage + 1) + ' to ' + Math.min(currentPage * perPage, filteredResults.length) + ' of ' + filteredResults.length"></span>
+          </div>
+          <div>
+            <button @click="previousPage" :disabled="currentPage === 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
+            <button @click="nextPage" :disabled="currentPage === totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
+          </div>
+        </div>
+      </section>
+      
+      <!-- Summary -->
+      <section aria-labelledby="summary-heading" x-show="summary" class="mt-8">
+        <h2 id="summary-heading" class="text-2xl font-bold mb-4">Summary:</h2>
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p><strong>Total URLs:</strong> <span x-text="summary.total_urls"></span></p>
+              <p><strong>Passed:</strong> <span x-text="summary.pass"></span></p>
+              <p><strong>Failed:</strong> <span x-text="summary.fail"></span></p>
+            </div>
+            <div>
+              <p><strong>Average Connection Time:</strong> <span x-text="summary.average_connection_time_ms"></span></p>
+              <p><strong>Start Time:</strong> <span x-text="summary.start_time"></span></p>
+              <p><strong>End Time:</strong> <span x-text="summary.end_time"></span></p>
+              <p><strong>Execution Time:</strong> <span x-text="summary.execution_time_ms + ' ms'"></span></p>
+            </div>
+          </div>
+          <div class="mt-4">
+            <h3 class="text-xl font-bold mb-2">Exceptions:</h3>
+            <div id="exceptionsContainer"></div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- Charts -->
+      <section aria-labelledby="charts-heading" x-show="summary" class="mt-8">
+        <h2 id="charts-heading" class="text-2xl font-bold mb-4">Charts:</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-white dark:bg-gray-800 shadow-md rounded p-4" style="height: 400px;">
+            <canvas id="statusChart"></canvas>
+          </div>
+          <div class="bg-white dark:bg-gray-800 shadow-md rounded p-4" style="height: 400px;">
+            <canvas id="connectionTimeChart"></canvas>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      function app() {
+        return {
+          darkMode: false,
+          fontSize: 16,
+          perPage: 10,
+          passName: '',
+          isLoading: false,
+          isDownloading: {
+            excel: false,
+            csv: false,
+            txt: false
+          },
+          uploadProgress: 0,
+          error: '',
+          results: [],
+          filteredResults: [],
+          paginatedResults: [],
+          currentPage: 1,
+          totalPages: 1,
+          sortColumn: 'S.No',
+          sortOrder: 'asc',
+          search: '',
+          status: '',
+          summary: null,
+          statusChart: null,
+          connectionTimeChart: null,
+          selectedForComparison: [],
+
+          init() {
+            this.darkMode = localStorage.getItem('darkMode') === 'true';
+            this.changeFontSize();
+            this.$watch('darkMode', val => {
+              localStorage.setItem('darkMode', val.toString());
+              if (val) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+              this.$nextTick(() => {
+                this.updateCharts();
+              });
+            });
+            this.$watch('results', () => {
+              this.filterResults();
+            });
+            this.$watch('currentPage', () => this.updatePaginatedResults());
+            this.$watch('perPage', () => this.updatePaginatedResults());
+            
+            if (this.darkMode) {
+              document.documentElement.classList.add('dark');
+            }
+          },
+
+          toggleDarkMode() {
+            this.darkMode = !this.darkMode;
+          },
+
+          changeFontSize() {
+            document.body.style.fontSize = this.fontSize + 'px';
+          },
+
+          submitForm(event) {
+            event.preventDefault();
+            this.isLoading = true;
+            this.error = '';
+            this.results = [];
+            this.summary = null;
+            this.uploadProgress = 0;
+
+            const formData = new FormData(event.target);
+            
+            fetch('/', {
+              method: 'POST',
+              body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.error) {
+                this.error = data.error;
+              } else {
+                this.startStreamingResults();
+              }
+            })
+            .catch(error => {
+              this.error = 'An error occurred while processing the request.';
+              console.error('Error:', error);
+            })
+            .finally(() => {
+              this.isLoading = false;
+            });
+          },
+
+          startStreamingResults() {
+            const eventSource = new EventSource('/stream');
+            
+            eventSource.onmessage = (event) => {
+              const data = JSON.parse(event.data);
+              
+              if (data.result) {
+                this.results.push(data.result);
+                this.filterResults();
+              } else if (data.summary) {
+                this.summary = data.summary;
+                this.createCharts();
+                eventSource.close();
+              }
+            };
+
+            eventSource.onerror = (error) => {
+              console.error('EventSource failed:', error);
+              eventSource.close();
+            };
+          },
+
+          clearResults() {
+            this.results = [];
+            this.filteredResults = [];
+            this.paginatedResults = [];
+            this.summary = null;
+            this.error = '';
+            this.selectedForComparison = [];
+          },
+
+          filterResults() {
+            this.filteredResults = this.results.filter(result => {
+              const matchesSearch = this.search === '' || 
+                result.URLS.toLowerCase().includes(this.search.toLowerCase()) || 
+                result['Modified URLS'].toLowerCase().includes(this.search.toLowerCase());
+              const matchesStatus = this.status === '' || result['Pass/Fail'] === this.status;
+              return matchesSearch && matchesStatus;
+            });
+            this.updatePagination();
+          },
+
+          sortResults(column) {
+            if (this.sortColumn === column) {
+              this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+              this.sortColumn = column;
+              this.sortOrder = 'asc';
+            }
+            this.filteredResults.sort((a, b) => {
+              if (a[column] < b[column]) return this.sortOrder === 'asc' ? -1 : 1;
+              if (a[column] > b[column]) return this.sortOrder === 'asc' ? 1 : -1;
+              return 0;
+            });
+            this.updatePaginatedResults();
+          },
+
+          updatePagination() {
+            this.totalPages = Math.ceil(this.filteredResults.length / this.perPage);
+            this.currentPage = 1;
+            this.updatePaginatedResults();
+          },
+
+          updatePaginatedResults() {
+            const start = (this.currentPage - 1) * this.perPage;
+            const end = start + this.perPage;
+            this.paginatedResults = this.filteredResults.slice(start, end);
+          },
+
+          previousPage() {
+            if (this.currentPage > 1) {
+              this.currentPage--;
+            }
+          },
+
+          nextPage() {
+            if (this.currentPage < this.totalPages) {
+              this.currentPage++;
+            }
+          },
+
+          downloadFile(format) {
+            this.isDownloading[format] = true;
+            fetch('/download/' + format, {
+                method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                results: this.results,
+                summary: this.summary
+              }),
+            }).then(response => response.blob())
+              .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'results.' + (format === 'excel' ? 'xlsx' : format);
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+              })
+              .catch(error => {
+                console.error('Error downloading file:', error);
+                this.error = 'An error occurred while downloading the file.';
+              })
+              .finally(() => {
+                this.isDownloading[format] = false;
+              });
+          },
+
+          createCharts() {
+            console.log("Creating charts...");
+            console.log("Summary data:", this.summary);
+            
+            if (this.summary) {
+              this.$nextTick(() => {
+                this.createStatusChart();
+                this.createConnectionTimeChart();
+                this.displayExceptions();
+              });
+            } else {
+              console.log("No summary data available for charts");
+            }
+          },
+
+          displayExceptions() {
+            const exceptionsContainer = document.getElementById('exceptionsContainer');
+            if (!exceptionsContainer) {
+              console.error("Exceptions container not found");
+              return;
+            }
+
+            exceptionsContainer.innerHTML = '';
+            if (this.summary.exceptions && Object.keys(this.summary.exceptions).length > 0) {
+              const ul = document.createElement('ul');
+              for (const [exception, count] of Object.entries(this.summary.exceptions)) {
+                const li = document.createElement('li');
+                li.textContent = `${exception}: ${count}`;
+                ul.appendChild(li);
+              }
+              exceptionsContainer.appendChild(ul);
+            } else {
+              exceptionsContainer.textContent = 'No exceptions occurred.';
+            }
+          },
+
+          createStatusChart() {
+            console.log("Creating status chart");
+            const ctx = document.getElementById('statusChart');
+            if (!ctx) {
+              console.error("Status chart canvas not found");
+              return;
+            }
+            
+            if (this.statusChart) {
+              this.statusChart.destroy();
+            }
+            
+            try {
+              this.statusChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                  labels: ['Pass', 'Fail'],
+                  datasets: [{
+                    data: [this.summary.pass, this.summary.fail],
+                    backgroundColor: ['#10B981', '#EF4444']
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                      labels: {
+                        color: this.darkMode ? '#ffffff' : '#000000',
+                        font: {
+                          size: 14
+                        }
+                      }
+                    },
+                    title: {
+                      display: true,
+                      text: 'SSL Check Status',
+                      color: this.darkMode ? '#ffffff' : '#000000',
+                      font: {
+                        size: 18
+                      }
+                    }
+                  }
+                }
+              });
+              console.log("Status chart created successfully");
+            } catch (error) {
+              console.error("Error creating status chart:", error);
+            }
+          },
+
+          createConnectionTimeChart() {
+            console.log("Creating connection time chart");
+            const ctx = document.getElementById('connectionTimeChart');
+            if (!ctx) {
+              console.error("Connection time chart canvas not found");
+              return;
+            }
+            
+            if (this.connectionTimeChart) {
+              this.connectionTimeChart.destroy();
+            }
+            
+            try {
+              const connectionTimes = this.results.map(r => r['Connection Time (ms)']);
+              const labels = this.results.map(r => r.URLS.substring(0, 15) + (r.URLS.length > 15 ? '...' : ''));
+              
+              this.connectionTimeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                  labels: labels,
+                  datasets: [{
+                    label: 'Connection Time (ms)',
+                    data: connectionTimes,
+                    backgroundColor: '#3B82F6'
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                      labels: {
+                        color: this.darkMode ? '#ffffff' : '#000000',
+                        font: {
+                          size: 14
+                        }
+                      }
+                    },
+                    title: {
+                      display: true,
+                      text: 'Connection Times',
+                      color: this.darkMode ? '#ffffff' : '#000000',
+                      font: {
+                        size: 18
+                      }
+                    }
+                  },
+                  scales: {
+                    x: {
+                      ticks: {
+                        color: this.darkMode ? '#ffffff' : '#000000',
+                        font: {
+                          size: 12
+                        }
+                      }
+                    },
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        color: this.darkMode ? '#ffffff' : '#000000',
+                        font: {
+                          size: 12
+                        }
+                      }
+                    }
+                  }
+                }
+              });
+              console.log("Connection time chart created successfully");
+            } catch (error) {
+              console.error("Error creating connection time chart:", error);
+            }
+          },
+
+          updateCharts() {
+            this.$nextTick(() => {
+              if (this.statusChart) {
+                this.statusChart.options.plugins.legend.labels.color = this.darkMode ? '#ffffff' : '#000000';
+                this.statusChart.options.plugins.title.color = this.darkMode ? '#ffffff' : '#000000';
+                this.statusChart.update();
+              }
+              if (this.connectionTimeChart) {
+                this.connectionTimeChart.options.plugins.legend.labels.color = this.darkMode ? '#ffffff' : '#000000';
+                this.connectionTimeChart.options.plugins.title.color = this.darkMode ? '#ffffff' : '#000000';
+                this.connectionTimeChart.options.scales.x.ticks.color = this.darkMode ? '#ffffff' : '#000000';
+                this.connectionTimeChart.options.scales.y.ticks.color = this.darkMode ? '#ffffff' : '#000000';
+                this.connectionTimeChart.update();
+              }
+            });
+          },
+
+          resetCompare() {
+            this.selectedForComparison = [];
+            // Uncheck all comparison checkboxes
+            this.results.forEach(result => {
+              const checkbox = document.getElementById('compare-' + result['S.No']);
+              if (checkbox) checkbox.checked = false;
+            });
+          }
+        };
+      }
+    </script>
+  </body>
+</html>
