@@ -1,0 +1,9 @@
+Flask
+pandas
+cryptography
+Flask-Limiter
+Flask-Caching
+xlsxwriter
+flask_wtf
+pandas
+openpyxl
