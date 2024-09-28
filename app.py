@@ -1,3 +1,6 @@
+# Copyright (c) 2024 Jyothiswaroop Boggavarapu
+# This file is part of SSL-Certificate-Checker, released under the MIT License.
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import ssl
 import socket
@@ -63,7 +66,7 @@ def handle_exception(e: Exception) -> str:
     error_mapping = {
         ssl.SSLError: "SSL Certificate Error",
         ssl.CertificateError: "Certificate Error",
-        socket.timeout: "Connection Timeout",
+        socket.timeout: "Connection Timeout: The server took too long to respond.",
         socket.gaierror: "DNS Resolution Error",
         socket.error: "Socket Error",
         ConnectionRefusedError: "Connection Refused",
@@ -71,9 +74,29 @@ def handle_exception(e: Exception) -> str:
         ConnectionAbortedError: "Connection Aborted",
         ConnectionError: "Connection Error",
         ValueError: "Value Error",
-        OSError: "OS Error",
+        OSError: lambda e: "DNS Resolution Error" if 'No address associated with hostname' in str(e) else f"OS Error: {str(e)}",
+        PermissionError: "Permission Error",
+        FileNotFoundError: "File Not Found Error",
+        IOError: "IO Error",
+        MemoryError: "Memory Error: Not enough memory to complete the operation.",
+        TimeoutError: "Timeout Error: The operation timed out.",
+        NotImplementedError: "Not Implemented Error",
+        KeyError: "Key Error",
+        IndexError: "Index Error",
+        AttributeError: "Attribute Error",
+        TypeError: "Type Error",
+        ImportError: "Import Error",
+        RuntimeError: "Runtime Error"
     }
-    return error_mapping.get(type(e), f"Unexpected Error: {str(e)}")
+    
+    # Handle x509 exceptions separately
+    if isinstance(e, x509.base.InvalidVersion):
+        return "Invalid X.509 version"
+    elif isinstance(e, ValueError) and "Invalid certificate" in str(e):
+        return "Invalid certificate"
+    
+    error_handler = error_mapping.get(type(e), lambda x: f"Unexpected Error: {str(x)}")
+    return error_handler(e) if callable(error_handler) else error_handler
 
 def is_ip_address(url: str) -> bool:
     return bool(re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', url))
@@ -136,24 +159,35 @@ def get_certificate_details(url: str) -> CertificateInfo:
     except Exception as e:
         return CertificateInfo(False, "", "", "", "", "", handle_exception(e))
 
-def process_url(row: int, url: str, pass_name: str) -> Dict[str, Any]:
+def process_url(row, url, pass_name):
     original_url = url
     formatted_url = format_url(url)
     start_time = time.time()
-    cert_info = get_certificate_details(formatted_url)
-    end_time = time.time()
-    connection_time = (end_time - start_time) * 1000
+    try:
+        cert_info = get_certificate_details(formatted_url)
+        end_time = time.time()
+        connection_time = (end_time - start_time) * 1000
 
-    status = 'Pass' if cert_info.success and pass_name.lower() in cert_info.issuer_by.lower() else 'Fail'
-    
-    result = {
-        'S.No': row,
-        'URLS': original_url,
-        'Modified URLS': formatted_url,
-        'Pass/Fail': status,
-        'Connection Time (ms)': round(connection_time, 2),
-        **cert_info.to_dict()
-    }
+        status = 'Pass' if cert_info.success and pass_name.lower() in cert_info.issuer_by.lower() else 'Fail'
+        
+        result = {
+            'S.No': row,
+            'URLS': original_url,
+            'Modified URLS': formatted_url,
+            'Pass/Fail': status,
+            'Connection Time (ms)': round(connection_time, 2),
+            **cert_info.to_dict()
+        }
+    except Exception as e:
+        result = {
+            'S.No': row,
+            'URLS': original_url,
+            'Modified URLS': formatted_url,
+            'Pass/Fail': 'Fail',
+            'Connection Time (ms)': 'N/A',
+            'Success': False,
+            'Exception': str(e)
+        }
     
     return result
 
@@ -172,7 +206,7 @@ def process_urls_generator(urls: List[str], pass_name: str):
                     'Success': False, 'Exception': f'Error: {exc}'
                 }
 
-def process_urls_in_order(urls: List[str], pass_name: str):
+def process_urls_in_order(urls, pass_name):
     results = []
     start_time = time.time()
     for idx, url in enumerate(urls, start=1):
@@ -183,7 +217,6 @@ def process_urls_in_order(urls: List[str], pass_name: str):
     end_time = time.time()
     summary = summarize_results(results, start_time, end_time)
     yield {'summary': summary, 'complete': True}
-
 
 def process_urls(urls: List[str], pass_name: str) -> List[Dict[str, Any]]:
     results = []
@@ -253,6 +286,7 @@ def index():
             app.config['URLS'] = urls
             app.config['PASS_NAME'] = pass_name
 
+            urls = df.iloc[:, 0].tolist()
             return jsonify({'message': 'Processing started', 'total_urls': len(urls)})
 
         except Exception as e:
@@ -271,11 +305,13 @@ def stream():
         return jsonify({'error': 'No data to process'}), 400
 
     def generate():
-        for result in process_urls_in_order(urls, pass_name):
+        total_urls = len(urls)
+        for index, result in enumerate(process_urls_in_order(urls, pass_name), 1):
             if 'complete' in result:
                 yield f"data: {json.dumps(result)}\n\n"
             else:
-                yield f"data: {json.dumps({'result': result})}\n\n"
+                progress = (index / total_urls) * 100
+                yield f"data: {json.dumps({'result': result, 'progress': progress})}\n\n"
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
