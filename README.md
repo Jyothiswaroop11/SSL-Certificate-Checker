@@ -100,7 +100,7 @@ The SSL Certificate Checker is a robust web-based tool designed to extract and d
 7. Open a web browser and navigate to `http://localhost:5000`
 
 ## License
-This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/Jyothiswaroop11/SSL-Certificate-Checker/blob/main/LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/Jyothiswaroop11/SSL-Certificate-Checker/blob/main/LICENSE) file for details.
 
 MIT License
 
