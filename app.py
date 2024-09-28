@@ -1,5 +1,5 @@
 # Copyright (c) 2024 Jyothiswaroop Boggavarapu
-# This file is part of SSL-Certificate-Checker, released under the MIT License.
+# This file is part of SSL-Certificate-Checker, released under the MIT License - see LICENSE file for details.
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import ssl
