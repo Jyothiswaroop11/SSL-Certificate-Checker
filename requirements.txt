@@ -1,72 +1,33 @@
 # Copyright (c) 2024 Jyothiswaroop Boggavarapu
-# This file is part of SSL-Certificate-Checker, released under the MIT License - see LICENSE file for details.
+# This file is part of SSL-Certificate-Checker, released under the MIT License.
 
 
 # Web Framework
 Flask==2.0.2
 
-# SSL and Cryptography
-pyOpenSSL==21.0.0
-cryptography==3.4.7
-
 # Data Processing
 pandas==1.3.3
 openpyxl==3.0.9  # For Excel file support
 
+# Cryptography and SSL
+cryptography==3.4.7
+pyOpenSSL==21.0.0
+
 # Concurrent Processing
 futures==3.1.1
 
-# Date and Time Handling
-python-dateutil==2.8.2
+# Type Hinting
+typing-extensions==3.10.0.2
 
-# HTML Parsing (if needed)
-beautifulsoup4==4.10.0
+# Logging
+python-dotenv==0.19.1  # For environment variable management
 
-# HTTP Requests (if needed)
-requests==2.26.0
+# Additional Dependencies
+urllib3==1.26.7  # Required by some other libraries
+chardet==4.0.0  # Character encoding detection
+idna==3.2  # For Internationalized Domain Names (IDNs)
 
-# Environment Variables
-python-dotenv==0.19.1
-
-# WSGI Server
-gunicorn==20.1.0
-
-# For potential database operations
-SQLAlchemy==1.4.25
-
-# For form handling in Flask
-Flask-WTF==0.15.1
-
-# For managing Flask extensions
-Flask-Extension==1.0
-
-# For API creation (if needed)
-flask-restful==0.3.9
-
-# For testing
-pytest==6.2.5
-
-# For linting and code style
-flake8==3.9.2
-black==21.9b0
-
-# For type checking
-mypy==0.910
-
-# For security headers
-Flask-Talisman==0.8.1
-
-# For CORS if needed
-Flask-CORS==3.0.10
-
-# For caching if implemented
-Flask-Caching==1.10.1
-
-# For rate limiting if implemented
-Flask-Limiter==1.4
-
-# For async support if needed
-aiohttp==3.7.4
-
-# For HTML sanitization
-bleach==4.1.0
+# Development Tools (optional, comment out if not needed)
+pytest==6.2.5  # For testing
+flake8==3.9.2  # For linting
+black==21.9b0  # For code formatting
