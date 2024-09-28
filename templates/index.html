@@ -1,3 +1,7 @@
+# Copyright (c) 2024 Jyothiswaroop Boggavarapu
+# This file is part of SSL-Certificate-Checker, released under the MIT License.
+
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -24,6 +28,99 @@
       .fail { background-color: #EF4444; color: white; }
       .dark .pass { background-color: #059669; }
       .dark .fail { background-color: #DC2626; }
+      #backToTop {
+        display: none;
+        position: fixed;
+        bottom: 20px;
+        right: 30px;
+        z-index: 99;
+        cursor: pointer;
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+      }
+      .modal-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 90%;
+        max-width: 1200px;
+        height: 500px;
+        position: relative;
+      }
+      .close-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #aaa;
+      }
+      .close-btn:hover,
+      .close-btn:focus {
+        color: #000;
+        text-decoration: none;
+      }
+      .dark .modal-content {
+        background-color: #2d3748;
+        color: #e2e8f0;
+      }
+      .dark .close-btn {
+        color: #e2e8f0;
+      }
+      .dark .close-btn:hover,
+      .dark .close-btn:focus {
+        color: #ffffff;
+      }
+      #popupChart {
+        width: 100%;
+        height: 100%;
+      }
+      .error-popup {
+        display: none;
+        position: fixed;
+        z-index: 1001;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+      }
+      .error-popup-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 90%;
+        max-width: 800px;
+        max-height: 80%;
+        overflow-y: auto;
+      }
+      .dark .error-popup-content {
+        background-color: #2d3748;
+        color: #e2e8f0;
+      }
+      .hide-scrollbar {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* Internet Explorer 10+ */
+      }
+      .hide-scrollbar::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none; /* Safari and Chrome */
+      }
     </style>
   </head>
   <body x-data="app()" x-init="init()" :class="{ 'dark': darkMode }" class="min-h-screen transition-colors duration-200 bg-gray-100">
@@ -39,28 +136,19 @@
             <input type="number" id="fontSize" x-model="fontSize" @input="changeFontSize()" min="7" max="50" class="border rounded px-2 py-1 w-16">
             <span class="ml-1">px</span>
           </div>
-          <div>
-            <label for="itemsPerPage" class="mr-2">Items per page:</label>
-            <select id="itemsPerPage" x-model="perPage" @change="updatePagination()" class="border rounded px-2 py-1">
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
-              <option>100</option>
-            </select>
-          </div>
           <button @click="toggleDarkMode()" class="bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-bold py-2 px-4 rounded">
             <i class="fas" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
             <span x-text="darkMode ? 'Light Mode' : 'Dark Mode'"></span>
           </button>
         </div>
       </section>
-      
+
       <!-- Form -->
       <section aria-labelledby="form-heading">
         <h2 id="form-heading" class="text-2xl font-bold mb-4">Certificate Check Form</h2>
         <form @submit.prevent="submitForm" enctype="multipart/form-data" class="bg-white dark:bg-gray-800 shadow-md rounded px-8 pt-6 pb-8 mb-4">
           <div class="mb-4">
-            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="pass_name">Enter PASS_NAME:</label>
+            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="pass_name">Enter Certificate Name to Verify:</label>
             <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="pass_name" name="pass_name" type="text" required x-model="passName" aria-describedby="passNameHelp">
             <p id="passNameHelp" class="text-sm text-gray-600 dark:text-gray-400 mt-1">Enter the expected issuer name for SSL certificate validation.</p>
           </div>
@@ -78,7 +166,7 @@
           <div class="flex items-center justify-between">
             <button class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit" :disabled="isLoading">
               <i class="fas" :class="isLoading ? 'fa-spinner fa-spin' : 'fa-upload'"></i>
-              <span x-text="isLoading ? 'Processing...' : 'Upload & Check SSL'"></span>
+              <span x-text="isLoading ? 'Processing...' : 'Submit'"></span>
             </button>
             <button @click="clearResults" type="button" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
               <i class="fas fa-trash-alt mr-2"></i> Clear Results
@@ -86,10 +174,46 @@
           </div>
         </form>
       </section>
-      
+
       <!-- Error Messages -->
       <div x-show="error" x-text="error" class="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-600 dark:text-red-300 px-4 py-3 rounded relative mb-4" role="alert"></div>
-      
+
+      <!-- Progress Bar -->
+      <div x-show="isLoading || progress > 0" class="mb-4">
+        <h3 class="text-lg font-semibold mb-2">Progress:</h3>
+        <div class="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700">
+          <div class="h-4 rounded-full transition-all duration-500 ease-out"
+              :class="{
+                'bg-blue-600': !currentUrlHasError && progress < 100,
+                'bg-red-600': currentUrlHasError && progress < 100,
+                'bg-green-500': progress === 100
+              }"
+              :style="'width: ' + progress + '%'">
+          </div>
+        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 text-left" x-text="progress.toFixed(2) + '% complete'"></p>
+      </div>
+
+      <!-- Error Messages -->
+      <div x-show="errors.length > 0" class="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-600 dark:text-red-300 px-4 py-3 rounded relative mb-4" role="alert">
+        <h4 class="font-bold mb-2">Errors encountered:</h4>
+        <template x-if="!hasMoreThanFiveErrors()">
+          <ul class="list-disc pl-5">
+            <template x-for="error in getDisplayErrors()" :key="error">
+              <li x-text="error"></li>
+            </template>
+          </ul>
+        </template>
+        <template x-if="hasMoreThanFiveErrors()">
+          <button 
+            @click="openErrorPopup()"
+            class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mt-2"
+          >
+            View All Errors (<span x-text="errors.length"></span>)
+          </button>
+        </template>
+      </div>
+
       <!-- Compare Certificates -->
       <section aria-labelledby="compare-heading" x-show="selectedForComparison.length > 1" class="mt-8">
         <h2 id="compare-heading" class="text-2xl font-bold mb-4">Compare Certificates</h2>
@@ -104,11 +228,12 @@
               </tr>
             </thead>
             <tbody>
-              <template x-for="field in ['URLS', 'Modified URLS', 'Pass/Fail', 'Connection Time (ms)', 'Common Name', 'Issuer By', 'Issuer To', 'Valid From', 'Valid To']" :key="field">
+              <template x-for="field in ['URLS', 'Modified URLS', 'Pass/Fail', 'Connection Time (ms)', 'Common Name', 'Issuer By', 'Issuer To', 'Valid From', 'Valid To', 'Exception']" :key="field">
                 <tr>
                   <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700 font-bold" x-text="field"></td>
                   <template x-for="id in selectedForComparison" :key="id">
-                    <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="results.find(r => r['S.No'] == id)[field]"></td>
+                    <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" :class="{ 'pass': field === 'Pass/Fail' && results.find(r => r['S.No'] == id)[field] === 'Pass',
+                                  'fail': field === 'Pass/Fail' && results.find(r => r['S.No'] == id)[field] === 'Fail' }" x-text="results.find(r => r['S.No'] == id)[field]"></td>
                   </template>
                 </tr>
               </template>
@@ -134,26 +259,44 @@
           </div>
           <div class="w-1/3 flex justify-end space-x-2">
             <button @click="downloadFile('excel')" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded relative" :disabled="isDownloading.excel">
-              <i class="fas fa-file-excel mr-2"></i>Excel
-              <span x-show="isDownloading.excel" class="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-50 rounded">
+              <i class="fas fa-file-excel mr-2"></i>Excel <span x-show="isDownloading.excel" class="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-50 rounded">
                 <i class="fas fa-circle-notch fa-spin"></i>
               </span>
             </button>
             <button @click="downloadFile('csv')" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded relative" :disabled="isDownloading.csv">
-              <i class="fas fa-file-csv mr-2"></i>CSV
-              <span x-show="isDownloading.csv" class="absolute inset-0 flex items-center justify-center bg-green-500 bg-opacity-50 rounded">
+              <i class="fas fa-file-csv mr-2"></i>CSV <span x-show="isDownloading.csv" class="absolute inset-0 flex items-center justify-center bg-green-500 bg-opacity-50 rounded">
                 <i class="fas fa-circle-notch fa-spin"></i>
               </span>
             </button>
             <button @click="downloadFile('txt')" class="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded relative" :disabled="isDownloading.txt">
-              <i class="fas fa-file-alt mr-2"></i>TXT
-              <span x-show="isDownloading.txt" class="absolute inset-0 flex items-center justify-center bg-yellow-500 bg-opacity-50 rounded">
+              <i class="fas fa-file-alt mr-2"></i>TXT <span x-show="isDownloading.txt" class="absolute inset-0 flex items-center justify-center bg-yellow-500 bg-opacity-50 rounded">
                 <i class="fas fa-circle-notch fa-spin"></i>
               </span>
             </button>
             <button @click="resetCompare" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded" x-show="selectedForComparison.length > 0">
               <i class="fas fa-undo mr-2"></i>Reset Compare
             </button>
+          </div>
+        </div>
+        <!-- Pagination (Top) -->
+        <div class="mt-4 mb-4 flex flex-wrap items-center justify-between">
+          <div class="flex-1">
+            <span x-html="getPaginationInfo() + ' | ' + getPassFailInfo()"></span>
+          </div>
+          <div class="flex-1 flex justify-center">
+            <div>
+              <label for="itemsPerPage" class="mr-2">Items per page:</label>
+              <select id="itemsPerPage" x-model="perPage" @change="updatePagination()" class="border rounded px-2 py-1">
+                <option>10</option>
+                <option>25</option>
+                <option>50</option>
+                <option>100</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex-1 flex justify-end">
+            <button @click="previousPage" :disabled="currentPage === 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
+            <button @click="nextPage" :disabled="currentPage === totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
           </div>
         </div>
         <!-- Results Table -->
@@ -197,9 +340,9 @@
             <tbody>
               <template x-for="(result, index) in paginatedResults" :key="index">
                 <tr :class="{ 'dark:bg-gray-900': index % 2 === 0 }">
-                    <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700">
-                        <input type="checkbox" :id="'compare-' + result['S.No']" :value="result['S.No']" x-model="selectedForComparison">
-                      </td>
+                  <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700">
+                    <input type="checkbox" :id="'compare-' + result['S.No']" :value="result['S.No']" x-model="selectedForComparison">
+                  </td>
                   <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['S.No']"></td>
                   <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" x-text="result['URLS']"></td>
                   <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700" :class="result['Pass/Fail'] === 'Pass' ? 'pass' : 'fail'" x-text="result['Pass/Fail']"></td>
@@ -215,33 +358,54 @@
             </tbody>
           </table>
         </div>
-        <!-- Pagination -->
-        <div class="mt-4 flex justify-between items-center">
-          <div>
-            <span x-text="'Showing ' + ((currentPage - 1) * perPage + 1) + ' to ' + Math.min(currentPage * perPage, filteredResults.length) + ' of ' + filteredResults.length"></span>
+        <!-- Pagination (Bottom) -->
+        <div class="mt-4 flex flex-wrap items-center justify-between">
+          <div class="flex-1">
+            <span x-html="getPaginationInfo() + ' | ' + getPassFailInfo()"></span>
           </div>
-          <div>
+          <div class="flex-1 flex justify-end">
             <button @click="previousPage" :disabled="currentPage === 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
             <button @click="nextPage" :disabled="currentPage === totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
           </div>
         </div>
       </section>
-      
+
       <!-- Summary -->
       <section aria-labelledby="summary-heading" x-show="summary" class="mt-8">
         <h2 id="summary-heading" class="text-2xl font-bold mb-4">Summary:</h2>
         <div class="bg-white dark:bg-gray-800 shadow-md rounded px-8 pt-6 pb-8 mb-4">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <p><strong>Total URLs:</strong> <span x-text="summary.total_urls"></span></p>
-              <p><strong>Passed:</strong> <span x-text="summary.pass"></span></p>
-              <p><strong>Failed:</strong> <span x-text="summary.fail"></span></p>
+              <p>
+                <strong>Total URLs:</strong>
+                <span x-text="summary.total_urls"></span>
+              </p>
+              <p>
+                <strong>Passed:</strong>
+                <span x-text="summary.pass"></span>
+              </p>
+              <p>
+                <strong>Failed:</strong>
+                <span x-text="summary.fail"></span>
+              </p>
             </div>
             <div>
-              <p><strong>Average Connection Time:</strong> <span x-text="summary.average_connection_time_ms"></span></p>
-              <p><strong>Start Time:</strong> <span x-text="summary.start_time"></span></p>
-              <p><strong>End Time:</strong> <span x-text="summary.end_time"></span></p>
-              <p><strong>Execution Time:</strong> <span x-text="summary.execution_time_ms + ' ms'"></span></p>
+              <p>
+                <strong>Average Connection Time:</strong>
+                <span x-text="summary.average_connection_time_ms"></span>
+              </p>
+              <p>
+                <strong>Start Time:</strong>
+                <span x-text="summary.start_time"></span>
+              </p>
+              <p>
+                <strong>End Time:</strong>
+                <span x-text="summary.end_time"></span>
+              </p>
+              <p>
+                <strong>Execution Time:</strong>
+                <span x-text="summary.execution_time_ms + ' ms'"></span>
+              </p>
             </div>
           </div>
           <div class="mt-4">
@@ -250,19 +414,84 @@
           </div>
         </div>
       </section>
-      
+
       <!-- Charts -->
       <section aria-labelledby="charts-heading" x-show="summary" class="mt-8">
         <h2 id="charts-heading" class="text-2xl font-bold mb-4">Charts:</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="bg-white dark:bg-gray-800 shadow-md rounded p-4" style="height: 400px;">
+          <div class="bg-white dark:bg-gray-800 shadow-md rounded p-4 relative" style="height: 400px;">
             <canvas id="statusChart"></canvas>
+            <button @click="showChartPopup('statusChart')" class="absolute top-2 right-2 bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded">
+              <i class="fas fa-expand-arrows-alt"></i>
+            </button>
           </div>
-          <div class="bg-white dark:bg-gray-800 shadow-md rounded p-4" style="height: 400px;">
+          <div class="bg-white dark:bg-gray-800 shadow-md rounded p-4 relative" style="height: 400px;">
             <canvas id="connectionTimeChart"></canvas>
+            <button @click="showChartPopup('connectionTimeChart')" class="absolute top-2 right-2 bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded">
+              <i class="fas fa-expand-arrows-alt"></i>
+            </button>
           </div>
         </div>
       </section>
+    </div>
+
+    <!-- Back to Top Button -->
+    <button id="backToTop" @click="scrollToTop" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+      <i class="fas fa-arrow-up mr-2"></i>Top
+    </button>
+
+    <!-- Chart Popup Modal -->
+    <div id="chartModal" class="modal">
+      <div class="modal-content">
+        <button @click="closeChartPopup()" class="close-btn" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+        <canvas id="popupChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Error Popup -->
+    <div id="errorPopup" class="error-popup fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="display: none;">
+      <div class="error-popup-content bg-white dark:bg-gray-800 w-full h-full flex flex-col">
+        <div class="flex justify-between items-center p-4 border-b">
+          <h2 class="text-2xl font-bold">All Errors</h2>
+          <button 
+            @click="closeErrorPopup()"
+            class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Close
+          </button>
+        </div>
+        <div class="flex-grow overflow-hidden relative p-4">
+          <div class="absolute inset-0 overflow-auto hide-scrollbar">
+            <table id="errorTable" class="w-full">
+              <thead>
+                <tr>
+                  <th class="px-4 py-2 text-left sticky top-0 bg-white dark:bg-gray-800 z-10">S.No</th>
+                  <th class="px-4 py-2 text-left sticky top-0 bg-white dark:bg-gray-800 z-10">URL No</th>
+                  <th class="px-4 py-2 text-left sticky top-0 bg-white dark:bg-gray-800 z-10">URL</th>
+                  <th class="px-4 py-2 text-left sticky top-0 bg-white dark:bg-gray-800 z-10">Error Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Table content will be dynamically populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="relative h-16"> <!-- Increased height for better visibility -->
+          <button 
+            @click="scrollErrorTableToTop()"
+            class="absolute bottom-4 right-4 bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full"
+            id="errorTableUpButton"
+            style="display: none;"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -292,9 +521,17 @@
           summary: null,
           statusChart: null,
           connectionTimeChart: null,
+          popupChart: null,
           selectedForComparison: [],
-
+          progress: 0,
+          passCount: 0,
+          failCount: 0,
+          errors: [],
+          hasErrors: false,
+          currentUrlHasError: false,
+      
           init() {
+            console.log('Initializing app');
             this.darkMode = localStorage.getItem('darkMode') === 'true';
             this.changeFontSize();
             this.$watch('darkMode', val => {
@@ -310,23 +547,40 @@
             });
             this.$watch('results', () => {
               this.filterResults();
+              this.updatePassFailCounts();
             });
             this.$watch('currentPage', () => this.updatePaginatedResults());
-            this.$watch('perPage', () => this.updatePaginatedResults());
+            this.$watch('perPage', () => this.updatePagination());
             
             if (this.darkMode) {
               document.documentElement.classList.add('dark');
             }
+      
+            // Back to Top button
+            window.onscroll = () => {
+              if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+                document.getElementById("backToTop").style.display = "block";
+              } else {
+                document.getElementById("backToTop").style.display = "none";
+              }
+            };
+      
+            // Add event listener for error table scrolling
+            document.querySelector('.error-popup-content .overflow-auto')?.addEventListener('scroll', this.toggleUpArrow);
+      
+            this.errors = [];
+            this.hasErrors = false;
           },
-
+      
           toggleDarkMode() {
             this.darkMode = !this.darkMode;
+            this.updateCharts();
           },
-
+      
           changeFontSize() {
             document.body.style.fontSize = this.fontSize + 'px';
           },
-
+      
           submitForm(event) {
             event.preventDefault();
             this.isLoading = true;
@@ -334,7 +588,10 @@
             this.results = [];
             this.summary = null;
             this.uploadProgress = 0;
-
+            this.progress = 0;
+            this.errors = [];
+            this.hasErrors = false;
+      
             const formData = new FormData(event.target);
             
             fetch('/', {
@@ -346,7 +603,7 @@
               if (data.error) {
                 this.error = data.error;
               } else {
-                this.startStreamingResults();
+                this.startStreamingResults(data.total_urls);
               }
             })
             .catch(error => {
@@ -357,29 +614,57 @@
               this.isLoading = false;
             });
           },
-
-          startStreamingResults() {
+      
+          startStreamingResults(totalUrls) {
+            console.log('Starting to stream results');
             const eventSource = new EventSource('/stream');
+            this.isLoading = true;
+            this.progress = 0;
+            this.errors = [];
+            this.hasErrors = false;
             
             eventSource.onmessage = (event) => {
               const data = JSON.parse(event.data);
               
               if (data.result) {
                 this.results.push(data.result);
+                this.progress = Number(((this.results.length / totalUrls) * 100).toFixed(2));
                 this.filterResults();
+                this.updatePassFailCounts();
+      
+                // Check for errors in the result
+                this.currentUrlHasError = !!data.result.Exception;
+                if (this.currentUrlHasError) {
+                  const errorObj = {
+                    sNo: this.errors.length + 1,
+                    urlNo: data.result['S.No'],
+                    url: data.result.URLS,
+                    message: data.result.Exception
+                  };
+                  this.errors.push(errorObj);
+                  this.hasErrors = true;
+                  console.log('Error added:', errorObj);
+                  console.log('Total errors:', this.errors.length);
+                }
               } else if (data.summary) {
                 this.summary = data.summary;
+                this.progress = 100; // Ensure progress reaches exactly 100%
                 this.createCharts();
                 eventSource.close();
+                this.isLoading = false;
+                console.log('Streaming completed');
               }
             };
-
+      
             eventSource.onerror = (error) => {
               console.error('EventSource failed:', error);
+              this.errors.push('An error occurred while processing URLs. Please try again.');
+              this.hasErrors = true;
               eventSource.close();
+              this.isLoading = false;
             };
           },
-
+      
           clearResults() {
             this.results = [];
             this.filteredResults = [];
@@ -387,8 +672,13 @@
             this.summary = null;
             this.error = '';
             this.selectedForComparison = [];
+            this.progress = 0;
+            this.passCount = 0;
+            this.failCount = 0;
+            this.errors = [];
+            this.hasErrors = false;
           },
-
+      
           filterResults() {
             this.filteredResults = this.results.filter(result => {
               const matchesSearch = this.search === '' || 
@@ -399,7 +689,12 @@
             });
             this.updatePagination();
           },
-
+      
+          updatePassFailCounts() {
+            this.passCount = this.filteredResults.filter(r => r['Pass/Fail'] === 'Pass').length;
+            this.failCount = this.filteredResults.filter(r => r['Pass/Fail'] === 'Fail').length;
+          },
+      
           sortResults(column) {
             if (this.sortColumn === column) {
               this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
@@ -414,35 +709,46 @@
             });
             this.updatePaginatedResults();
           },
-
+      
           updatePagination() {
             this.totalPages = Math.ceil(this.filteredResults.length / this.perPage);
             this.currentPage = 1;
             this.updatePaginatedResults();
           },
-
+      
           updatePaginatedResults() {
             const start = (this.currentPage - 1) * this.perPage;
-            const end = start + this.perPage;
+            const end = start + parseInt(this.perPage);
             this.paginatedResults = this.filteredResults.slice(start, end);
           },
-
+      
+          getPaginationInfo() {
+            const start = (this.currentPage - 1) * this.perPage + 1;
+            const end = Math.min(this.currentPage * this.perPage, this.filteredResults.length);
+            const total = this.filteredResults.length;
+            return `Showing ${start} to ${end} of ${total}`;
+          },
+      
+          getPassFailInfo() {
+            return `<span class="text-green-500">Pass: ${this.passCount}</span> | <span class="text-red-500">Fail: ${this.failCount}</span>`;
+          },
+      
           previousPage() {
             if (this.currentPage > 1) {
               this.currentPage--;
             }
           },
-
+      
           nextPage() {
             if (this.currentPage < this.totalPages) {
               this.currentPage++;
             }
           },
-
+      
           downloadFile(format) {
             this.isDownloading[format] = true;
             fetch('/download/' + format, {
-                method: 'POST',
+              method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
@@ -469,7 +775,7 @@
                 this.isDownloading[format] = false;
               });
           },
-
+      
           createCharts() {
             console.log("Creating charts...");
             console.log("Summary data:", this.summary);
@@ -484,14 +790,14 @@
               console.log("No summary data available for charts");
             }
           },
-
+      
           displayExceptions() {
             const exceptionsContainer = document.getElementById('exceptionsContainer');
             if (!exceptionsContainer) {
               console.error("Exceptions container not found");
               return;
             }
-
+      
             exceptionsContainer.innerHTML = '';
             if (this.summary.exceptions && Object.keys(this.summary.exceptions).length > 0) {
               const ul = document.createElement('ul');
@@ -505,7 +811,59 @@
               exceptionsContainer.textContent = 'No exceptions occurred.';
             }
           },
-
+      
+          getChartOptions(title) {
+            const textColor = this.darkMode ? '#ffffff' : '#000000';
+            return {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'top',
+                  labels: {
+                    color: textColor,
+                    font: {
+                      size: 14
+                    }
+                  }
+                },
+                title: {
+                  display: true,
+                  text: title,
+                  color: textColor,
+                  font: {
+                    size: 18
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  ticks: {
+                    color: textColor,
+                    font: {
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                  }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    color: textColor,
+                    font: {
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                  }
+                }
+              }
+            };
+          },
+      
           createStatusChart() {
             console.log("Creating status chart");
             const ctx = document.getElementById('statusChart');
@@ -528,36 +886,14 @@
                     backgroundColor: ['#10B981', '#EF4444']
                   }]
                 },
-                options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'top',
-                      labels: {
-                        color: this.darkMode ? '#ffffff' : '#000000',
-                        font: {
-                          size: 14
-                        }
-                      }
-                    },
-                    title: {
-                      display: true,
-                      text: 'SSL Check Status',
-                      color: this.darkMode ? '#ffffff' : '#000000',
-                      font: {
-                        size: 18
-                      }
-                    }
-                  }
-                }
+                options: this.getChartOptions('SSL Check Status')
               });
               console.log("Status chart created successfully");
             } catch (error) {
               console.error("Error creating status chart:", error);
             }
           },
-
+      
           createConnectionTimeChart() {
             console.log("Creating connection time chart");
             const ctx = document.getElementById('connectionTimeChart');
@@ -584,82 +920,171 @@
                     backgroundColor: '#3B82F6'
                   }]
                 },
-                options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'top',
-                      labels: {
-                        color: this.darkMode ? '#ffffff' : '#000000',
-                        font: {
-                          size: 14
-                        }
-                      }
-                    },
-                    title: {
-                      display: true,
-                      text: 'Connection Times',
-                      color: this.darkMode ? '#ffffff' : '#000000',
-                      font: {
-                        size: 18
-                      }
-                    }
-                  },
-                  scales: {
-                    x: {
-                      ticks: {
-                        color: this.darkMode ? '#ffffff' : '#000000',
-                        font: {
-                          size: 12
-                        }
-                      }
-                    },
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        color: this.darkMode ? '#ffffff' : '#000000',
-                        font: {
-                          size: 12
-                        }
-                      }
-                    }
-                  }
-                }
+                options: this.getChartOptions('Connection Times')
               });
               console.log("Connection time chart created successfully");
             } catch (error) {
               console.error("Error creating connection time chart:", error);
             }
           },
-
+      
           updateCharts() {
             this.$nextTick(() => {
+              const options = this.getChartOptions('');
               if (this.statusChart) {
-                this.statusChart.options.plugins.legend.labels.color = this.darkMode ? '#ffffff' : '#000000';
-                this.statusChart.options.plugins.title.color = this.darkMode ? '#ffffff' : '#000000';
+                this.statusChart.options = { ...options, plugins: { ...options.plugins, title: { ...options.plugins.title, text: 'SSL Check Status' } } };
                 this.statusChart.update();
               }
               if (this.connectionTimeChart) {
-                this.connectionTimeChart.options.plugins.legend.labels.color = this.darkMode ? '#ffffff' : '#000000';
-                this.connectionTimeChart.options.plugins.title.color = this.darkMode ? '#ffffff' : '#000000';
-                this.connectionTimeChart.options.scales.x.ticks.color = this.darkMode ? '#ffffff' : '#000000';
-                this.connectionTimeChart.options.scales.y.ticks.color = this.darkMode ? '#ffffff' : '#000000';
+                this.connectionTimeChart.options = { ...options, plugins: { ...options.plugins, title: { ...options.plugins.title, text: 'Connection Times' } } };
                 this.connectionTimeChart.update();
               }
             });
           },
-
+      
           resetCompare() {
             this.selectedForComparison = [];
-            // Uncheck all comparison checkboxes
             this.results.forEach(result => {
               const checkbox = document.getElementById('compare-' + result['S.No']);
               if (checkbox) checkbox.checked = false;
             });
+          },
+      
+          scrollToTop() {
+            window.scrollTo({top: 0, behavior: 'smooth'});
+          },
+      
+          showChartPopup(chartId) {
+            const modal = document.getElementById("chartModal");
+            const popupCanvas = document.getElementById("popupChart");
+            const ctx = popupCanvas.getContext('2d');
+            
+            // Clear previous chart
+            if (this.popupChart) {
+              this.popupChart.destroy();
+            }
+
+            // Set canvas dimensions
+            popupCanvas.width = modal.clientWidth * 0.9;  // 90% of modal width
+            popupCanvas.height = 400;  // Fixed height
+
+            // Create a new chart instance for the popup
+            this.popupChart = new Chart(ctx, {
+              type: chartId === 'statusChart' ? 'pie' : 'bar',
+              data: chartId === 'statusChart' ? this.statusChart.data : this.connectionTimeChart.data,
+              options: {
+                ...this.getChartOptions(chartId === 'statusChart' ? 'SSL Check Status' : 'Connection Times'),
+                responsive: true,
+                maintainAspectRatio: false
+              }
+            });
+
+            modal.style.display = "block";
+          },
+
+          closeChartPopup() {
+            const modal = document.getElementById("chartModal");
+            modal.style.display = "none";
+            if (this.popupChart) {
+              this.popupChart.destroy();
+            }
+          },
+
+          handleFileChange(event) {
+            const file = event.target.files[0];
+            if (file) {
+              console.log('File selected:', file.name);
+              // You can add additional logic here if needed
+            }
+          },
+
+          updateUploadProgress(event) {
+            if (event.lengthComputable) {
+              this.uploadProgress = (event.loaded / event.total) * 100;
+              console.log('Upload progress:', this.uploadProgress.toFixed(2) + '%');
+            }
+          },
+
+          resetUploadProgress() {
+            this.uploadProgress = 0;
+          },
+
+          openErrorPopup() {
+            console.log('Opening error popup');
+            console.log('Number of errors:', this.errors.length);
+            const errorPopup = document.getElementById('errorPopup');
+            const errorTable = document.getElementById('errorTable');
+            const errorTableBody = errorTable.querySelector('tbody');
+            
+            // Clear previous content
+            errorTableBody.innerHTML = '';
+            
+            // Populate table with errors
+            this.errors.forEach((error) => {
+              const row = errorTableBody.insertRow();
+              const cellSNo = row.insertCell();
+              const cellURLNo = row.insertCell();
+              const cellURL = row.insertCell();
+              const cellMessage = row.insertCell();
+              
+              cellSNo.textContent = error.sNo;
+              cellURLNo.textContent = error.urlNo;
+              cellURL.textContent = error.url;
+              cellMessage.textContent = error.message;
+              
+              [cellSNo, cellURLNo, cellURL, cellMessage].forEach(cell => {
+                cell.className = 'border px-4 py-2';
+              });
+            });
+            
+            errorPopup.style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Prevent body scrolling
+            this.toggleUpArrow();
+
+            // Add scroll event listener to the error table container
+            const errorTableContainer = errorPopup.querySelector('.overflow-auto');
+            errorTableContainer.addEventListener('scroll', this.toggleUpArrow);
+          },
+
+          closeErrorPopup() {
+            console.log('Closing error popup');
+            const errorPopup = document.getElementById('errorPopup');
+            errorPopup.style.display = 'none';
+            document.body.style.overflow = ''; // Restore body scrolling
+
+            // Remove scroll event listener
+            const errorTableContainer = errorPopup.querySelector('.overflow-auto');
+            errorTableContainer.removeEventListener('scroll', this.toggleUpArrow);
+          },
+
+          scrollErrorTableToTop() {
+            const errorTableContainer = document.querySelector('#errorPopup .overflow-auto');
+            errorTableContainer.scrollTop = 0;
+            this.toggleUpArrow();
+          },
+
+          toggleUpArrow() {
+            const errorTableContainer = document.querySelector('#errorPopup .overflow-auto');
+            const upArrow = document.getElementById('errorTableUpButton');
+            
+            if (errorTableContainer.scrollTop > 100) {
+              upArrow.style.display = 'block';
+            } else {
+              upArrow.style.display = 'none';
+            }
+          },
+
+          hasMoreThanFiveErrors() {
+            return this.errors.length > 5;
+          },
+
+          getDisplayErrors() {
+            return this.errors.slice(0, 5).map(err => 
+              `${err.url}: ${err.message}`
+            );
           }
         };
       }
-    </script>
+      </script>
   </body>
 </html>
