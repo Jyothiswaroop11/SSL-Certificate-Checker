@@ -62,42 +62,90 @@ The SSL Certificate Checker is a robust web-based tool designed to extract and d
 - pip (Python package manager)
 - Virtual environment (recommended)
 
-### Steps
+### Setup
+
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/ssl-certificate-checker.git
+   git clone https://github.com/your-username/ssl-certificate-checker.git
    cd ssl-certificate-checker
    ```
 
-2. Create and activate a virtual environment:
+2. Create a virtual environment:
    ```
    python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
    ```
 
-3. Install required packages:
+3. Activate the virtual environment:
+   - On Windows:
+     ```
+     venv\Scripts\activate
+     ```
+   - On macOS and Linux:
+     ```
+     source venv/bin/activate
+     ```
+
+4. Install the required packages:
    ```
    pip install -r requirements.txt
    ```
 
-4. Set up environment variables:
-   ```
-   export FLASK_APP=app.py
-   export FLASK_ENV=development
-   ```
-   On Windows, use `set` instead of `export`.
+### Running the Application
 
-5. Initialize the database (if applicable):
-   ```
-   flask db upgrade
-   ```
+1. Set the Flask application:
+   - On Windows:
+     ```
+     set FLASK_APP=app.py
+     ```
+   - On macOS and Linux:
+     ```
+     export FLASK_APP=app.py
+     ```
 
-6. Run the application:
+2. (Optional) Enable debug mode:
+   - On Windows:
+     ```
+     set FLASK_ENV=development
+     ```
+   - On macOS and Linux:
+     ```
+     export FLASK_ENV=development
+     ```
+
+3. Run the Flask application:
    ```
    flask run
    ```
 
-7. Open a web browser and navigate to `http://localhost:5000`
+4. Open a web browser and navigate to `http://localhost:5000` to access the SSL Certificate Checker.
+
+### Using the SSL Certificate Checker
+
+1. Prepare a CSV or Excel file containing a list of URLs you want to check.
+2. Enter the expected certificate name for validation.
+3. Upload your file and click "Submit" to start the SSL certificate checking process.
+4. View the results in the web interface or download them in your preferred format.
+
+### Stopping the Application
+
+To stop the Flask server, press `CTRL+C` in the terminal where it's running.
+
+### Deactivating the Virtual Environment
+
+When you're done, deactivate the virtual environment:
+```
+deactivate
+```
+
+## Troubleshooting
+
+If you encounter any issues, please check the following:
+- Ensure you're using Python 3.7 or higher.
+- Make sure all dependencies are correctly installed.
+- Check that you're in the project directory when running commands.
+- Verify that the virtual environment is activated when installing dependencies and running the application.
+
+For more information or if you encounter any bugs, please open an issue on the GitHub repository.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/Jyothiswaroop11/SSL-Certificate-Checker/blob/main/LICENSE) file for details.
