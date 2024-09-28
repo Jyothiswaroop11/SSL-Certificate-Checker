@@ -5,33 +5,41 @@ The SSL Certificate Checker is a robust web-based tool designed to extract and d
 
 ## Version History
 
-### Version 2.0 (Latest)
+## Version 2.0 (Latest)
 
-#### New Features and Improvements
-- Enhanced Error Handling
-- Real-time Progress Updates
-- Detailed Error Reporting
-- Improved Chart Functionality
-- User Interface Enhancements
-- Performance Optimization
+### New Features and Improvements
+* Enhanced Error Handling
+* Real-time Progress Updates
+* Detailed Error Reporting
+* Improved Chart Functionality
+* User Interface Enhancements
+* Performance Optimization
 
-#### Bug Fixes
-- Resolved issues with percentage display in the progress bar
-- Fixed error message formatting in the results table
-- Corrected chart rendering issues in dark mode
+### Bug Fixes
+* Resolved issues with percentage display in the progress bar
+* Fixed error message formatting in the results table
+* Corrected chart rendering issues in dark mode
+* Improved exception handling and display in results
+  - Enhanced clarity and consistency in reporting SSL-related exceptions
+  - Added more detailed error messages for common SSL certificate issues
+  - Implemented proper formatting and truncation of long exception messages in the UI
 
-### Version 1.0
+## Version 1.0
 
-#### Features
-- File Upload Support (XLS, XLSX, CSV)
-- Detailed SSL Certificate Information
-- Performance Metrics
-- Parallel URL Processing
-- Pagination
-- Export Options (Excel, CSV, Text)
-- Dark Mode Support
-- Customizable Font Size
-- Execution Summary
+### Features
+* File Upload Support (XLS, XLSX, CSV)
+* Detailed SSL Certificate Information
+* Performance Metrics
+* Parallel URL Processing
+* Pagination
+* Export Options (Excel, CSV, Text)
+* Dark Mode Support
+* Customizable Font Size
+* Execution Summary
+* Compare Certificates Side by Side
+  - Ability to select multiple certificates for comparison
+  - Side-by-side view of selected certificates' details
+  - Highlighting of differences between compared certificates
 
 ## Key Components
 - Web Interface (HTML, CSS, JavaScript with Alpine.js)
