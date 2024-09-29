@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set APP_PATH=C:\Users\Jyothiswaroop\OneDrive\Desktop\python\app
+set APP_PATH=
 cd /d "%APP_PATH%" || exit /b 1
 
 REM Start Flask server
