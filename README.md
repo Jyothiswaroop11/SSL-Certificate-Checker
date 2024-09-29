@@ -79,7 +79,7 @@ The SSL Certificate Checker is a robust web-based tool designed to extract and d
 ```
 ssl-certificate-checker/
 │
-├── run_app.bat
+├── Run_SSL_Checker.bat
 │
 └── app/
     ├── templates/
@@ -99,7 +99,7 @@ ssl-certificate-checker/
 
 ## Usage
 1. Navigate to the `ssl-certificate-checker` folder
-2. Double-click the `run_app.bat` file to start the application
+2. Double-click the `Run_SSL_Checker.bat` file to start the application
 3. Chrome will open automatically to http://localhost:5000
 4. Upload file (XLS, XLSX, or CSV) with URLs
 5. Enter expected certificate name
@@ -147,7 +147,7 @@ ssl-certificate-checker/
 
 ## Running the Application
 1. Ensure you are in the main `ssl-certificate-checker` folder
-2. Double-click the `run_app.bat` file to start the application
+2. Double-click the `Run_SSL_Checker.bat` file to start the application
 3. Chrome will automatically open to http://localhost:5000
 4. To stop the application, simply close the Chrome window
 
