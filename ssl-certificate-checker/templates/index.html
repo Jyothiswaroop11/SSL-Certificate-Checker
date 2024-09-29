@@ -196,7 +196,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
 
       <!-- Error Messages -->
       <div x-show="errors.length > 0" class="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-600 dark:text-red-300 px-4 py-3 rounded relative mb-4" role="alert">
-        <h4 class="font-bold mb-2">Errors encountered:</h4>
+        <h4 class="font-bold mb-2" x-text="hasMoreThanFiveErrors() ? 'Click on the below button to see all the errors.' : 'Errors encountered:'"></h4>
         <template x-if="!hasMoreThanFiveErrors()">
           <ul class="list-disc pl-5">
             <template x-for="error in getDisplayErrors()" :key="error">
@@ -534,6 +534,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
           errors: [],
           hasErrors: false,
           currentUrlHasError: false,
+          eventSource: null,
       
           init() {
             console.log('Initializing app');
@@ -622,13 +623,13 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
       
           startStreamingResults(totalUrls) {
             console.log('Starting to stream results');
-            const eventSource = new EventSource('/stream');
+            this.eventSource = new EventSource('/stream');
             this.isLoading = true;
             this.progress = 0;
             this.errors = [];
             this.hasErrors = false;
             
-            eventSource.onmessage = (event) => {
+            this.eventSource.onmessage = (event) => {
               const data = JSON.parse(event.data);
               
               if (data.result) {
@@ -636,7 +637,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
                 this.progress = Number(((this.results.length / totalUrls) * 100).toFixed(2));
                 this.filterResults();
                 this.updatePassFailCounts();
-      
+
                 // Check for errors in the result
                 this.currentUrlHasError = !!data.result.Exception;
                 if (this.currentUrlHasError) {
@@ -655,22 +656,31 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
                 this.summary = data.summary;
                 this.progress = 100; // Ensure progress reaches exactly 100%
                 this.createCharts();
-                eventSource.close();
+                this.eventSource.close();
+                this.eventSource = null;
                 this.isLoading = false;
                 console.log('Streaming completed');
               }
             };
-      
-            eventSource.onerror = (error) => {
+
+            this.eventSource.onerror = (error) => {
               console.error('EventSource failed:', error);
               this.errors.push('An error occurred while processing URLs. Please try again.');
               this.hasErrors = true;
-              eventSource.close();
+              this.eventSource.close();
+              this.eventSource = null;
               this.isLoading = false;
             };
           },
       
           clearResults() {
+            // Terminate the ongoing process if it exists
+            if (this.eventSource) {
+              this.eventSource.close();
+              this.eventSource = null;
+            }
+
+            // Clear all results and reset state
             this.results = [];
             this.filteredResults = [];
             this.paginatedResults = [];
@@ -682,6 +692,25 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
             this.failCount = 0;
             this.errors = [];
             this.hasErrors = false;
+            this.isLoading = false;
+
+            // Reset charts
+            if (this.statusChart) {
+              this.statusChart.destroy();
+              this.statusChart = null;
+            }
+            if (this.connectionTimeChart) {
+              this.connectionTimeChart.destroy();
+              this.connectionTimeChart = null;
+            }
+
+            // Clear file input
+            const fileInput = document.getElementById('file');
+            if (fileInput) {
+              fileInput.value = '';
+            }
+
+            console.log('Results cleared and process terminated');
           },
       
           filterResults() {
@@ -1090,6 +1119,6 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
           }
         };
       }
-      </script>
+    </script>
   </body>
 </html>
