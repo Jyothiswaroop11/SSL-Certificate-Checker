@@ -99,7 +99,7 @@ ssl-certificate-checker/
 
 ## Usage
 1. Navigate to the `ssl-certificate-checker` folder
-2. Double-click the `run_app.bat` file to start the application
+2. Double-click the `Run_SSL_Checker.bat` file to start the application
 3. Chrome will open automatically to http://localhost:5000
 4. Upload file (XLS, XLSX, or CSV) with URLs
 5. Enter expected certificate name
