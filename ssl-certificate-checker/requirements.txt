@@ -1,7 +1,6 @@
 # Copyright (c) 2024 Jyothiswaroop Boggavarapu
 # This file is part of SSL-Certificate-Checker, released under the MIT License.
 
-
 # Web Framework
 Flask==2.0.2
 
