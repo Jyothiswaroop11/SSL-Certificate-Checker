@@ -124,7 +124,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
         display: none; /* Safari and Chrome */
       }
       .dark textarea {
-            background-color: #000000;
+            background-color: #2d3748;
             color: #e2e8f0;
         }
         textarea {
@@ -195,7 +195,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
 
         .progress-bar {
         width: 100%;
-        height: 30px;
+        height: 15px;
         background-color: #e2e8f0;
         border-radius: 15px;
         overflow: hidden;
@@ -464,14 +464,13 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
           </div>
           <div class="flex-1 flex justify-end">
             <template x-if="filteredResults.length > perPage">
-                <div>
-                    <button @click="previousPage" x-show="currentPage > 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
-                    <button @click="nextPage" x-show="currentPage < totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
-                </div>
+              <div>
+                <button @click="previousPage" x-show="currentPage > 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
+                <button @click="nextPage" x-show="currentPage < totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
+              </div>
             </template>
+          </div>
         </div>
-        </div>
-
 
         <!-- Results Table -->
         <div class="overflow-x-auto">
@@ -512,7 +511,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
               </tr>
             </thead>
             <tbody>
-              <template x-for="(result, index) in paginatedResults" :key="index">
+              <template x-for="(result, index) in paginatedResults" :key="result['S.No']">
                 <tr :class="{ 'dark:bg-gray-900': index % 2 === 0 }">
                   <td class="py-2 px-4 border-b border-gray-200 dark:border-gray-700">
                     <input type="checkbox" :id="'compare-' + result['S.No']" :value="result['S.No']" x-model="selectedForComparison">
@@ -725,6 +724,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
     loggedEntries: new Set(),
     logScrollPosition: 0,
     autoScrollLogs: true,
+    sessionId: null,
 
     init() {
       console.log('Initializing app');
@@ -882,11 +882,14 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
       this.isLoading = true;
       this.error = '';
       this.results = [];
+      this.filteredResults = [];
+      this.paginatedResults = [];
       this.summary = null;
       this.uploadProgress = 0;
       this.progress = 0;
       this.errors = [];
       this.hasErrors = false;
+      this.sessionId = null;
       this.initLogging();
 
       const formData = new FormData(event.target);
@@ -904,6 +907,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
           if (data.error) {
             this.error = data.error;
           } else {
+            this.sessionId = data.session_id;
             this.startStreamingResults(data.total_urls);
           }
         })
@@ -923,18 +927,27 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ urls: urls, pass_name: this.passName }),
+          body: JSON.stringify({ 
+            urls: urls, 
+            pass_name: this.passName 
+          }),
         })
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
         .then(data => {
           if (data.error) {
             this.error = data.error;
           } else {
+            this.sessionId = data.session_id;
             this.startStreamingResults(data.total_urls);
           }
         })
         .catch(error => {
-          this.error = 'An error occurred while processing the request.';
+          this.error = `An error occurred while processing the request: ${error.message}`;
           console.error('Error:', error);
         })
         .finally(() => {
@@ -950,7 +963,11 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
 
     startStreamingResults(totalUrls) {
       console.log('Starting to stream results');
-      this.eventSource = new EventSource(this.isManualEntry ? '/stream_manual' : '/stream');
+      if (!this.sessionId) {
+        this.error = 'Invalid session. Please try submitting the form again.';
+        return;
+      }
+      this.eventSource = new EventSource(`${this.isManualEntry ? '/stream_manual' : '/stream'}?session_id=${this.sessionId}`);
       this.isLoading = true;
       this.progress = 0;
       this.errors = [];
@@ -964,10 +981,10 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
         if (data.result) {
           console.log('Received result:', data.result);
           this.results.push(data.result);
-          this.progress = Number(((this.results.length / totalUrls) * 100).toFixed(2));
-          this.filterResults();
+          this.filteredResults = [...this.results];
+          this.updatePaginationWithAutoAdvance();
+          this.progress = Math.min(Number(((this.results.length / totalUrls) * 100).toFixed(2)), 100);
           this.updatePassFailCounts();
-          this.updatePaginationWithoutReset();
 
           this.currentUrlHasError = !!data.result.Exception;
           if (this.currentUrlHasError) {
@@ -1068,12 +1085,29 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
 
     updatePaginationWithoutReset() {
       console.log('Updating pagination');
+      this.totalPages = Math.ceil(this.filteredResults.length / this.perPage);
+      
+      // Ensure current page is within bounds
+      this.currentPage = Math.max(1, Math.min(this.currentPage, this.totalPages));
+      
+      this.updatePaginatedResults();
+      console.log('Pagination updated:', {
+        totalPages: this.totalPages,
+        currentPage: this.currentPage,
+        perPage: this.perPage
+      });
+      this.addLog('info', `Pagination updated: ${this.perPage} items per page, ${this.totalPages} total pages`);
+    },
+
+    updatePaginationWithAutoAdvance() {
+      console.log('Updating pagination with auto-advance');
       const oldTotalPages = this.totalPages;
       this.totalPages = Math.ceil(this.filteredResults.length / this.perPage);
       
-      // If the number of pages has increased and we're on the last page, move to the new last page
-      if (this.totalPages > oldTotalPages && this.currentPage === oldTotalPages) {
-        this.currentPage = this.totalPages;
+      // Check if we need to advance to the next page
+      if (this.results.length > this.currentPage * this.perPage) {
+        this.currentPage++;
+        this.addLog('info', `Advanced to page ${this.currentPage}`);
       }
       
       // Ensure current page is within bounds
@@ -1098,6 +1132,11 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
         // This forces Alpine to re-evaluate the table bindings
         this.paginatedResults = [...this.paginatedResults];
       });
+    },
+
+    updatePagination() {
+      this.currentPage = 1; // Reset to first page when changing items per page
+      this.updatePaginationWithoutReset();
     },
 
     getPaginationInfo() {
