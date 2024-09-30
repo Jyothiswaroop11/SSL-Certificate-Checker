@@ -6,11 +6,12 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SSL Certificate Checker</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     <style>
       [x-cloak] { display: none !important; }
@@ -72,6 +73,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
         color: #000;
         text-decoration: none;
       }
+      
       .dark .modal-content {
         background-color: #2d3748;
         color: #e2e8f0;
@@ -104,7 +106,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
         padding: 20px;
         border: 1px solid #888;
         width: 90%;
-        max-width: 800px;
+        /* max-width: 800px; */
         max-height: 80%;
         overflow-y: auto;
       }
@@ -121,12 +123,148 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
         height: 0;
         display: none; /* Safari and Chrome */
       }
+      .dark textarea {
+            background-color: #000000;
+            color: #e2e8f0;
+        }
+        textarea {
+            background-color: #e2e8f0;
+            color: #000000;
+        }
+
+        /* Updated styles for log button and popup */
+        #logButton {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+        .log-popup {
+            display: none;
+            position: fixed;
+            z-index: 1001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .log-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+        .dark .log-content {
+            background-color: #2d3748;
+            color: #e2e8f0;
+        }
+        .log-close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .log-close:hover,
+        .log-close:focus {
+            color: #000;
+            text-decoration: none;
+        }
+        .dark .log-close:hover,
+        .dark .log-close:focus {
+            color: #fff;
+        }
+        #logContent {
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #ccc;
+        }
+        .dark .log-entry {
+            border-bottom-color: #4a5568;
+        }
+
+        .progress-bar {
+        width: 100%;
+        height: 30px;
+        background-color: #e2e8f0;
+        border-radius: 15px;
+        overflow: hidden;
+        position: relative;
+      }
+      .dark .progress-bar {
+        background-color: #4a5568;
+      }
+      .progress {
+        height: 100%;
+        width: 0;
+        border-radius: 15px;
+        position: relative;
+        overflow: hidden;
+        transition: width 0.5s ease-out;
+      }
+      .particle {
+        position: absolute;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.5);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      @keyframes rise {
+        to {
+          transform: translateY(-100%);
+          opacity: 0;
+        }
+      }
     </style>
   </head>
   <body x-data="app()" x-init="init()" :class="{ 'dark': darkMode }" class="min-h-screen transition-colors duration-200 bg-gray-100">
     <div class="container mx-auto px-4 py-8">
-      <h1 class="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">SSL Certificate Checker</h1>
-      
+        <h1 class="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">SSL Certificate Checker</h1>
+        
+      <!-- Log Button -->
+      <button id="logButton" @click="openLogPopup" class="fixed bottom-4 left-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" :class="{ 'dark:bg-gray-700 dark:text-white': darkMode }">
+        View Logs
+    </button>
+
+      <!-- Log Popup -->
+      <div id="logPopup" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" style="display: none;">
+        <div class="bg-white dark:bg-gray-800 w-3/4 h-3/4 rounded-lg p-6 overflow-hidden flex flex-col relative">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold">Application Logs</h2>
+            <div class="flex items-center">
+              <span class="mr-4" x-text="autoScrollLogs ? 'Auto-scroll: On' : 'Auto-scroll: Off'"></span>
+              <button @click="toggleAutoScroll" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-4">
+                <span x-text="autoScrollLogs ? 'Disable' : 'Enable'"></span> Auto-scroll
+              </button>
+              <button @click="closeLogPopup()" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                Close
+              </button>
+            </div>
+          </div>
+          <div id="logContent" class="flex-grow overflow-y-auto"></div>
+          <button 
+            @click="scrollLogToTop"
+            class="absolute bottom-4 right-4 bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full"
+            id="logUpButton"
+            style="display: none;"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <!-- Settings and Controls -->
       <section aria-labelledby="settings-heading" class="mb-8">
         <h2 id="settings-heading" class="sr-only">Settings and Controls</h2>
@@ -143,56 +281,83 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
         </div>
       </section>
 
-      <!-- Form -->
-      <section aria-labelledby="form-heading">
+      <!-- Combined Certificate Check Form -->
+      <section aria-labelledby="form-heading" class="mb-8">
         <h2 id="form-heading" class="text-2xl font-bold mb-4">Certificate Check Form</h2>
         <form @submit.prevent="submitForm" enctype="multipart/form-data" class="bg-white dark:bg-gray-800 shadow-md rounded px-8 pt-6 pb-8 mb-4">
-          <div class="mb-4">
-            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="pass_name">Enter Certificate Name to Verify:</label>
-            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="pass_name" name="pass_name" type="text" required x-model="passName" aria-describedby="passNameHelp">
-            <p id="passNameHelp" class="text-sm text-gray-600 dark:text-gray-400 mt-1">Enter the expected issuer name for SSL certificate validation.</p>
-          </div>
-          <div class="mb-6">
-            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="file">Upload File:</label>
-            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="file" name="file" type="file" accept=".csv, .xlsx" required aria-describedby="fileHelp" @change="handleFileChange">
-            <p id="fileHelp" class="text-sm text-gray-600 dark:text-gray-400 mt-1">Upload a CSV or Excel file containing URLs to check.</p>
-          </div>
-          <div class="mb-4" x-show="uploadProgress > 0">
-            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-              <div class="bg-blue-600 h-2.5 rounded-full" :style="'width: ' + uploadProgress + '%'"></div>
+          <div class="flex flex-wrap -mx-4">
+            <!-- Left side: File Upload -->
+            <div class="w-full md:w-1/2 px-4 mb-4">
+              <h3 class="text-xl font-semibold mb-4">File Upload</h3>
+              <div class="mb-4">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="pass_name">Enter Certificate Name to Verify (optional):</label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="pass_name" name="pass_name" type="text" x-model="passName" aria-describedby="passNameHelp">
+                <p id="passNameHelp" class="text-sm text-gray-600 dark:text-gray-400 mt-1">Enter the expected issuer name for SSL certificate validation (optional).</p>
+              </div>
+              <div class="mb-4">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="file">Upload File:</label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="file" name="file" type="file" accept=".csv, .xlsx" x-ref="fileInput" @change="handleFileChange">
+                <p id="fileHelp" class="text-sm text-gray-600 dark:text-gray-400 mt-1">Upload a CSV or Excel file containing URLs to check.</p>
+              </div>
             </div>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1" x-text="'Upload progress: ' + uploadProgress + '%'"></p>
+            
+            <!-- Right side: Manual URL Entry -->
+            <div class="w-full md:w-1/2 px-4 mb-4">
+              <h3 class="text-xl font-semibold mb-4">Manual URL Entry</h3>
+              <div class="mb-4">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="manualUrls">
+                  Enter URLs (one per line):
+                </label>
+                <textarea
+                  id="manualUrls"
+                  x-model="manualUrls"
+                  @input="checkUrlLimit"
+                  class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-white dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  style="height: 150px; min-height: 150px; resize: vertical;"
+                  placeholder="https://example.com&#10;https://another-example.com&#10;https://last-example.com"
+                ></textarea>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <span x-text="getUrlCount()"></span> / <span x-text="maxManualUrls"></span> URLs
+                </p>
+              </div>
+            </div>
           </div>
-          <div class="flex items-center justify-between">
+
+          <!-- Shared buttons for both forms -->
+          <div class="flex items-center justify-between mt-6">
             <button class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit" :disabled="isLoading">
               <i class="fas" :class="isLoading ? 'fa-spinner fa-spin' : 'fa-upload'"></i>
               <span x-text="isLoading ? 'Processing...' : 'Submit'"></span>
             </button>
-            <button @click="clearResults" type="button" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-              <i class="fas fa-trash-alt mr-2"></i> Clear Results
+            <button @click="clearForm" type="button" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+              <i class="fas fa-trash-alt mr-2"></i> Clear Form
             </button>
           </div>
         </form>
       </section>
 
+      
       <!-- Error Messages -->
       <div x-show="error" x-text="error" class="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-600 dark:text-red-300 px-4 py-3 rounded relative mb-4" role="alert"></div>
 
       <!-- Progress Bar -->
       <div x-show="isLoading || progress > 0" class="mb-4">
         <h3 class="text-lg font-semibold mb-2">Progress:</h3>
-        <div class="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700">
-          <div class="h-4 rounded-full transition-all duration-500 ease-out"
-              :class="{
-                'bg-blue-600': !currentUrlHasError && progress < 100,
-                'bg-red-600': currentUrlHasError && progress < 100,
-                'bg-green-500': progress === 100
-              }"
-              :style="'width: ' + progress + '%'">
+        <div class="progress-bar">
+          <div class="progress"
+               :class="{
+                 'bg-blue-600': !currentUrlHasError && !hasError && progress < 100,
+                 'bg-red-600': currentUrlHasError && !hasError && progress < 100,
+                 'bg-green-500': !hasError && progress === 100,
+                 'bg-gray-400': hasError
+               }"
+               :style="'width: ' + (hasError ? errorProgress : progress) + '%'"
+               x-ref="progressBar">
           </div>
         </div>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 text-left" x-text="progress.toFixed(2) + '% complete'"></p>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 text-left" x-text="hasError ? 'Error occurred at ' + errorProgress.toFixed(2) + '%' : progress.toFixed(2) + '% complete'"></p>
       </div>
+
 
       <!-- Error Messages -->
       <div x-show="errors.length > 0" class="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-600 dark:text-red-300 px-4 py-3 rounded relative mb-4" role="alert">
@@ -245,6 +410,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
       <!-- Results -->
       <section aria-labelledby="results-heading" x-show="results.length > 0" class="mt-8">
         <h2 id="results-heading" class="text-2xl font-bold mb-4">Results:</h2>
+        
         <!-- Filters and Search -->
         <div class="mb-4 flex justify-between items-center">
           <div class="w-1/3">
@@ -278,6 +444,8 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
             </button>
           </div>
         </div>
+
+
         <!-- Pagination (Top) -->
         <div class="mt-4 mb-4 flex flex-wrap items-center justify-between">
           <div class="flex-1">
@@ -295,10 +463,16 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
             </div>
           </div>
           <div class="flex-1 flex justify-end">
-            <button @click="previousPage" :disabled="currentPage === 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
-            <button @click="nextPage" :disabled="currentPage === totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
-          </div>
+            <template x-if="filteredResults.length > perPage">
+                <div>
+                    <button @click="previousPage" x-show="currentPage > 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
+                    <button @click="nextPage" x-show="currentPage < totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
+                </div>
+            </template>
         </div>
+        </div>
+
+
         <!-- Results Table -->
         <div class="overflow-x-auto">
           <table class="min-w-full bg-white dark:bg-gray-800 shadow-md rounded">
@@ -358,15 +532,21 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
             </tbody>
           </table>
         </div>
+
+
         <!-- Pagination (Bottom) -->
         <div class="mt-4 flex flex-wrap items-center justify-between">
           <div class="flex-1">
             <span x-html="getPaginationInfo() + ' | ' + getPassFailInfo()"></span>
           </div>
           <div class="flex-1 flex justify-end">
-            <button @click="previousPage" :disabled="currentPage === 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
-            <button @click="nextPage" :disabled="currentPage === totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
-          </div>
+            <template x-if="filteredResults.length > perPage">
+                <div>
+                    <button @click="previousPage" x-show="currentPage > 1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Previous</button>
+                    <button @click="nextPage" x-show="currentPage < totalPages" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Next</button>
+                </div>
+            </template>
+        </div>
         </div>
       </section>
 
@@ -479,7 +659,7 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
             </table>
           </div>
         </div>
-        <div class="relative h-16"> <!-- Increased height for better visibility -->
+        <div class="relative h-16">
           <button 
             @click="scrollErrorTableToTop()"
             class="absolute bottom-4 right-4 bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full"
@@ -500,625 +680,968 @@ This file is part of SSL-Certificate-Checker, released under the MIT License.
     </footer>
     
     <script>
-      function app() {
-        return {
-          darkMode: false,
-          fontSize: 16,
-          perPage: 10,
-          passName: '',
-          isLoading: false,
-          isDownloading: {
-            excel: false,
-            csv: false,
-            txt: false
-          },
-          uploadProgress: 0,
-          error: '',
-          results: [],
-          filteredResults: [],
-          paginatedResults: [],
-          currentPage: 1,
-          totalPages: 1,
-          sortColumn: 'S.No',
-          sortOrder: 'asc',
-          search: '',
-          status: '',
-          summary: null,
-          statusChart: null,
-          connectionTimeChart: null,
-          popupChart: null,
-          selectedForComparison: [],
-          progress: 0,
-          passCount: 0,
-          failCount: 0,
-          errors: [],
-          hasErrors: false,
-          currentUrlHasError: false,
-          eventSource: null,
-      
-          init() {
-            console.log('Initializing app');
-            this.darkMode = localStorage.getItem('darkMode') === 'true';
-            this.changeFontSize();
-            this.$watch('darkMode', val => {
-              localStorage.setItem('darkMode', val.toString());
-              if (val) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
-              this.$nextTick(() => {
-                this.updateCharts();
-              });
-            });
-            this.$watch('results', () => {
-              this.filterResults();
-              this.updatePassFailCounts();
-            });
-            this.$watch('currentPage', () => this.updatePaginatedResults());
-            this.$watch('perPage', () => this.updatePagination());
-            
-            if (this.darkMode) {
-              document.documentElement.classList.add('dark');
-            }
-      
-            // Back to Top button
-            window.onscroll = () => {
-              if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
-                document.getElementById("backToTop").style.display = "block";
-              } else {
-                document.getElementById("backToTop").style.display = "none";
-              }
-            };
-      
-            // Add event listener for error table scrolling
-            document.querySelector('.error-popup-content .overflow-auto')?.addEventListener('scroll', this.toggleUpArrow);
-      
-            this.errors = [];
-            this.hasErrors = false;
-          },
-      
-          toggleDarkMode() {
-            this.darkMode = !this.darkMode;
-            this.updateCharts();
-          },
-      
-          changeFontSize() {
-            document.body.style.fontSize = this.fontSize + 'px';
-          },
-      
-          submitForm(event) {
-            event.preventDefault();
-            this.isLoading = true;
-            this.error = '';
-            this.results = [];
-            this.summary = null;
-            this.uploadProgress = 0;
-            this.progress = 0;
-            this.errors = [];
-            this.hasErrors = false;
-      
-            const formData = new FormData(event.target);
-            
-            fetch('/', {
-              method: 'POST',
-              body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.error) {
-                this.error = data.error;
-              } else {
-                this.startStreamingResults(data.total_urls);
-              }
-            })
-            .catch(error => {
-              this.error = 'An error occurred while processing the request.';
-              console.error('Error:', error);
-            })
-            .finally(() => {
-              this.isLoading = false;
-            });
-          },
-      
-          startStreamingResults(totalUrls) {
-            console.log('Starting to stream results');
-            this.eventSource = new EventSource('/stream');
-            this.isLoading = true;
-            this.progress = 0;
-            this.errors = [];
-            this.hasErrors = false;
-            
-            this.eventSource.onmessage = (event) => {
-              const data = JSON.parse(event.data);
-              
-              if (data.result) {
-                this.results.push(data.result);
-                this.progress = Number(((this.results.length / totalUrls) * 100).toFixed(2));
-                this.filterResults();
-                this.updatePassFailCounts();
+    function app() {
+  return {
+    darkMode: false,
+    fontSize: 16,
+    perPage: 10,
+    passName: '',
+    isLoading: false,
+    isDownloading: {
+      excel: false,
+      csv: false,
+      txt: false
+    },
+    uploadProgress: 0,
+    error: '',
+    results: [],
+    filteredResults: [],
+    paginatedResults: [],
+    currentPage: 1,
+    totalPages: 1,
+    sortColumn: 'S.No',
+    sortOrder: 'asc',
+    search: '',
+    status: '',
+    summary: null,
+    statusChart: null,
+    connectionTimeChart: null,
+    popupChart: null,
+    selectedForComparison: [],
+    progress: 0,
+    passCount: 0,
+    failCount: 0,
+    errors: [],
+    hasErrors: false,
+    currentUrlHasError: false,
+    eventSource: null,
+    manualUrls: '',
+    isLoadingManual: false,
+    isErrorPopupOpen: false,
+    maxManualUrls: 1000,
+    hasError: false,
+    errorProgress: 0,
+    logs: [],
+    loggedEntries: new Set(),
+    logScrollPosition: 0,
+    autoScrollLogs: true,
 
-                // Check for errors in the result
-                this.currentUrlHasError = !!data.result.Exception;
-                if (this.currentUrlHasError) {
-                  const errorObj = {
-                    sNo: this.errors.length + 1,
-                    urlNo: data.result['S.No'],
-                    url: data.result.URLS,
-                    message: data.result.Exception
-                  };
-                  this.errors.push(errorObj);
-                  this.hasErrors = true;
-                  console.log('Error added:', errorObj);
-                  console.log('Total errors:', this.errors.length);
-                }
-              } else if (data.summary) {
-                this.summary = data.summary;
-                this.progress = 100; // Ensure progress reaches exactly 100%
-                this.createCharts();
-                this.eventSource.close();
-                this.eventSource = null;
-                this.isLoading = false;
-                console.log('Streaming completed');
-              }
-            };
+    init() {
+      console.log('Initializing app');
+      this.darkMode = localStorage.getItem('darkMode') === 'true';
+      this.changeFontSize();
+      
+      this.$watch('darkMode', val => {
+        localStorage.setItem('darkMode', val.toString());
+        if (val) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        this.$nextTick(() => {
+          this.updateCharts();
+        });
+      });
 
-            this.eventSource.onerror = (error) => {
-              console.error('EventSource failed:', error);
-              this.errors.push('An error occurred while processing URLs. Please try again.');
-              this.hasErrors = true;
-              this.eventSource.close();
-              this.eventSource = null;
-              this.isLoading = false;
-            };
-          },
-      
-          clearResults() {
-            // Terminate the ongoing process if it exists
-            if (this.eventSource) {
-              this.eventSource.close();
-              this.eventSource = null;
-            }
+      this.$watch('results', (newResults) => {
+        console.log('Results updated:', newResults);
+        this.addLog('debug', `Results updated. Count: ${newResults.length}`);
+        this.filterResults();
+        this.updatePassFailCounts();
+      });
 
-            // Clear all results and reset state
-            this.results = [];
-            this.filteredResults = [];
-            this.paginatedResults = [];
-            this.summary = null;
-            this.error = '';
-            this.selectedForComparison = [];
-            this.progress = 0;
-            this.passCount = 0;
-            this.failCount = 0;
-            this.errors = [];
-            this.hasErrors = false;
-            this.isLoading = false;
+      this.$watch('filteredResults', (newFilteredResults) => {
+        console.log('Filtered results updated:', newFilteredResults);
+        this.addLog('debug', `Filtered results updated. Count: ${newFilteredResults.length}`);
+      });
 
-            // Reset charts
-            if (this.statusChart) {
-              this.statusChart.destroy();
-              this.statusChart = null;
-            }
-            if (this.connectionTimeChart) {
-              this.connectionTimeChart.destroy();
-              this.connectionTimeChart = null;
-            }
+      this.$watch('paginatedResults', (newPaginatedResults) => {
+        console.log('Paginated results updated:', newPaginatedResults);
+        this.addLog('debug', `Paginated results updated. Count: ${newPaginatedResults.length}`);
+      });
 
-            // Clear file input
-            const fileInput = document.getElementById('file');
-            if (fileInput) {
-              fileInput.value = '';
-            }
-
-            console.log('Results cleared and process terminated');
-          },
+      this.$watch('currentPage', () => this.updatePaginatedResults());
+      this.$watch('perPage', () => this.updatePagination());
       
-          filterResults() {
-            this.filteredResults = this.results.filter(result => {
-              const matchesSearch = this.search === '' || 
-                result.URLS.toLowerCase().includes(this.search.toLowerCase()) || 
-                result['Modified URLS'].toLowerCase().includes(this.search.toLowerCase());
-              const matchesStatus = this.status === '' || result['Pass/Fail'] === this.status;
-              return matchesSearch && matchesStatus;
-            });
-            this.updatePagination();
-          },
-      
-          updatePassFailCounts() {
-            this.passCount = this.filteredResults.filter(r => r['Pass/Fail'] === 'Pass').length;
-            this.failCount = this.filteredResults.filter(r => r['Pass/Fail'] === 'Fail').length;
-          },
-      
-          sortResults(column) {
-            if (this.sortColumn === column) {
-              this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
-            } else {
-              this.sortColumn = column;
-              this.sortOrder = 'asc';
-            }
-            this.filteredResults.sort((a, b) => {
-              if (a[column] < b[column]) return this.sortOrder === 'asc' ? -1 : 1;
-              if (a[column] > b[column]) return this.sortOrder === 'asc' ? 1 : -1;
-              return 0;
-            });
-            this.updatePaginatedResults();
-          },
-      
-          updatePagination() {
-            this.totalPages = Math.ceil(this.filteredResults.length / this.perPage);
-            this.currentPage = 1;
-            this.updatePaginatedResults();
-          },
-      
-          updatePaginatedResults() {
-            const start = (this.currentPage - 1) * this.perPage;
-            const end = start + parseInt(this.perPage);
-            this.paginatedResults = this.filteredResults.slice(start, end);
-          },
-      
-          getPaginationInfo() {
-            const start = (this.currentPage - 1) * this.perPage + 1;
-            const end = Math.min(this.currentPage * this.perPage, this.filteredResults.length);
-            const total = this.filteredResults.length;
-            return `Showing ${start} to ${end} of ${total}`;
-          },
-      
-          getPassFailInfo() {
-            return `<span class="text-green-500">Pass: ${this.passCount}</span> | <span class="text-red-500">Fail: ${this.failCount}</span>`;
-          },
-      
-          previousPage() {
-            if (this.currentPage > 1) {
-              this.currentPage--;
-            }
-          },
-      
-          nextPage() {
-            if (this.currentPage < this.totalPages) {
-              this.currentPage++;
-            }
-          },
-      
-          downloadFile(format) {
-            this.isDownloading[format] = true;
-            fetch('/download/' + format, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                results: this.results,
-                summary: this.summary
-              }),
-            }).then(response => response.blob())
-              .then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = 'results.' + (format === 'excel' ? 'xlsx' : format);
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-              })
-              .catch(error => {
-                console.error('Error downloading file:', error);
-                this.error = 'An error occurred while downloading the file.';
-              })
-              .finally(() => {
-                this.isDownloading[format] = false;
-              });
-          },
-      
-          createCharts() {
-            console.log("Creating charts...");
-            console.log("Summary data:", this.summary);
-            
-            if (this.summary) {
-              this.$nextTick(() => {
-                this.createStatusChart();
-                this.createConnectionTimeChart();
-                this.displayExceptions();
-              });
-            } else {
-              console.log("No summary data available for charts");
-            }
-          },
-      
-          displayExceptions() {
-            const exceptionsContainer = document.getElementById('exceptionsContainer');
-            if (!exceptionsContainer) {
-              console.error("Exceptions container not found");
-              return;
-            }
-      
-            exceptionsContainer.innerHTML = '';
-            if (this.summary.exceptions && Object.keys(this.summary.exceptions).length > 0) {
-              const ul = document.createElement('ul');
-              for (const [exception, count] of Object.entries(this.summary.exceptions)) {
-                const li = document.createElement('li');
-                li.textContent = `${exception}: ${count}`;
-                ul.appendChild(li);
-              }
-              exceptionsContainer.appendChild(ul);
-            } else {
-              exceptionsContainer.textContent = 'No exceptions occurred.';
-            }
-          },
-      
-          getChartOptions(title) {
-            const textColor = this.darkMode ? '#ffffff' : '#000000';
-            return {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: 'top',
-                  labels: {
-                    color: textColor,
-                    font: {
-                      size: 14
-                    }
-                  }
-                },
-                title: {
-                  display: true,
-                  text: title,
-                  color: textColor,
-                  font: {
-                    size: 18
-                  }
-                }
-              },
-              scales: {
-                x: {
-                  ticks: {
-                    color: textColor,
-                    font: {
-                      size: 12
-                    }
-                  },
-                  grid: {
-                    color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-                  }
-                },
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    color: textColor,
-                    font: {
-                      size: 12
-                    }
-                  },
-                  grid: {
-                    color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-                  }
-                }
-              }
-            };
-          },
-      
-          createStatusChart() {
-            console.log("Creating status chart");
-            const ctx = document.getElementById('statusChart');
-            if (!ctx) {
-              console.error("Status chart canvas not found");
-              return;
-            }
-            
-            if (this.statusChart) {
-              this.statusChart.destroy();
-            }
-            
-            try {
-              this.statusChart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                  labels: ['Pass', 'Fail'],
-                  datasets: [{
-                    data: [this.summary.pass, this.summary.fail],
-                    backgroundColor: ['#10B981', '#EF4444']
-                  }]
-                },
-                options: this.getChartOptions('SSL Check Status')
-              });
-              console.log("Status chart created successfully");
-            } catch (error) {
-              console.error("Error creating status chart:", error);
-            }
-          },
-      
-          createConnectionTimeChart() {
-            console.log("Creating connection time chart");
-            const ctx = document.getElementById('connectionTimeChart');
-            if (!ctx) {
-              console.error("Connection time chart canvas not found");
-              return;
-            }
-            
-            if (this.connectionTimeChart) {
-              this.connectionTimeChart.destroy();
-            }
-            
-            try {
-              const connectionTimes = this.results.map(r => r['Connection Time (ms)']);
-              const labels = this.results.map(r => r.URLS.substring(0, 15) + (r.URLS.length > 15 ? '...' : ''));
-              
-              this.connectionTimeChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                  labels: labels,
-                  datasets: [{
-                    label: 'Connection Time (ms)',
-                    data: connectionTimes,
-                    backgroundColor: '#3B82F6'
-                  }]
-                },
-                options: this.getChartOptions('Connection Times')
-              });
-              console.log("Connection time chart created successfully");
-            } catch (error) {
-              console.error("Error creating connection time chart:", error);
-            }
-          },
-      
-          updateCharts() {
-            this.$nextTick(() => {
-              const options = this.getChartOptions('');
-              if (this.statusChart) {
-                this.statusChart.options = { ...options, plugins: { ...options.plugins, title: { ...options.plugins.title, text: 'SSL Check Status' } } };
-                this.statusChart.update();
-              }
-              if (this.connectionTimeChart) {
-                this.connectionTimeChart.options = { ...options, plugins: { ...options.plugins, title: { ...options.plugins.title, text: 'Connection Times' } } };
-                this.connectionTimeChart.update();
-              }
-            });
-          },
-      
-          resetCompare() {
-            this.selectedForComparison = [];
-            this.results.forEach(result => {
-              const checkbox = document.getElementById('compare-' + result['S.No']);
-              if (checkbox) checkbox.checked = false;
-            });
-          },
-      
-          scrollToTop() {
-            window.scrollTo({top: 0, behavior: 'smooth'});
-          },
-      
-          showChartPopup(chartId) {
-            const modal = document.getElementById("chartModal");
-            const popupCanvas = document.getElementById("popupChart");
-            const ctx = popupCanvas.getContext('2d');
-            
-            // Clear previous chart
-            if (this.popupChart) {
-              this.popupChart.destroy();
-            }
-
-            // Set canvas dimensions
-            popupCanvas.width = modal.clientWidth * 0.9;  // 90% of modal width
-            popupCanvas.height = 400;  // Fixed height
-
-            // Create a new chart instance for the popup
-            this.popupChart = new Chart(ctx, {
-              type: chartId === 'statusChart' ? 'pie' : 'bar',
-              data: chartId === 'statusChart' ? this.statusChart.data : this.connectionTimeChart.data,
-              options: {
-                ...this.getChartOptions(chartId === 'statusChart' ? 'SSL Check Status' : 'Connection Times'),
-                responsive: true,
-                maintainAspectRatio: false
-              }
-            });
-
-            modal.style.display = "block";
-          },
-
-          closeChartPopup() {
-            const modal = document.getElementById("chartModal");
-            modal.style.display = "none";
-            if (this.popupChart) {
-              this.popupChart.destroy();
-            }
-          },
-
-          handleFileChange(event) {
-            const file = event.target.files[0];
-            if (file) {
-              console.log('File selected:', file.name);
-              // You can add additional logic here if needed
-            }
-          },
-
-          updateUploadProgress(event) {
-            if (event.lengthComputable) {
-              this.uploadProgress = (event.loaded / event.total) * 100;
-              console.log('Upload progress:', this.uploadProgress.toFixed(2) + '%');
-            }
-          },
-
-          resetUploadProgress() {
-            this.uploadProgress = 0;
-          },
-
-          openErrorPopup() {
-            console.log('Opening error popup');
-            console.log('Number of errors:', this.errors.length);
-            const errorPopup = document.getElementById('errorPopup');
-            const errorTable = document.getElementById('errorTable');
-            const errorTableBody = errorTable.querySelector('tbody');
-            
-            // Clear previous content
-            errorTableBody.innerHTML = '';
-            
-            // Populate table with errors
-            this.errors.forEach((error) => {
-              const row = errorTableBody.insertRow();
-              const cellSNo = row.insertCell();
-              const cellURLNo = row.insertCell();
-              const cellURL = row.insertCell();
-              const cellMessage = row.insertCell();
-              
-              cellSNo.textContent = error.sNo;
-              cellURLNo.textContent = error.urlNo;
-              cellURL.textContent = error.url;
-              cellMessage.textContent = error.message;
-              
-              [cellSNo, cellURLNo, cellURL, cellMessage].forEach(cell => {
-                cell.className = 'border px-4 py-2';
-              });
-            });
-            
-            errorPopup.style.display = 'flex';
-            document.body.style.overflow = 'hidden'; // Prevent body scrolling
-            this.toggleUpArrow();
-
-            // Add scroll event listener to the error table container
-            const errorTableContainer = errorPopup.querySelector('.overflow-auto');
-            errorTableContainer.addEventListener('scroll', this.toggleUpArrow);
-          },
-
-          closeErrorPopup() {
-            console.log('Closing error popup');
-            const errorPopup = document.getElementById('errorPopup');
-            errorPopup.style.display = 'none';
-            document.body.style.overflow = ''; // Restore body scrolling
-
-            // Remove scroll event listener
-            const errorTableContainer = errorPopup.querySelector('.overflow-auto');
-            errorTableContainer.removeEventListener('scroll', this.toggleUpArrow);
-          },
-
-          scrollErrorTableToTop() {
-            const errorTableContainer = document.querySelector('#errorPopup .overflow-auto');
-            errorTableContainer.scrollTop = 0;
-            this.toggleUpArrow();
-          },
-
-          toggleUpArrow() {
-            const errorTableContainer = document.querySelector('#errorPopup .overflow-auto');
-            const upArrow = document.getElementById('errorTableUpButton');
-            
-            if (errorTableContainer.scrollTop > 100) {
-              upArrow.style.display = 'block';
-            } else {
-              upArrow.style.display = 'none';
-            }
-          },
-
-          hasMoreThanFiveErrors() {
-            return this.errors.length > 5;
-          },
-
-          getDisplayErrors() {
-            return this.errors.slice(0, 5).map(err => 
-              `${err.url}: ${err.message}`
-            );
-          }
-        };
+      if (this.darkMode) {
+        document.documentElement.classList.add('dark');
       }
+
+      this.$watch('errors', () => {
+        if (this.isErrorPopupOpen) {
+          this.updateErrorPopup();
+        }
+      });
+
+      // Back to Top button
+      window.onscroll = () => {
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+          document.getElementById("backToTop").style.display = "block";
+        } else {
+          document.getElementById("backToTop").style.display = "none";
+        }
+      };
+
+      // Remove duplicate event listeners
+      document.querySelectorAll('button, input, select').forEach(element => {
+        element.removeEventListener('click', this.logInteraction);
+        element.addEventListener('click', this.logInteraction);
+      });
+
+      // Add event listener for error table scrolling
+      document.querySelector('.error-popup-content .overflow-auto')?.addEventListener('scroll', this.toggleUpArrow);
+
+      // Add scroll event listener for log content
+      document.getElementById('logContent').addEventListener('scroll', this.toggleLogUpArrow);
+
+      this.errors = [];
+      this.hasErrors = false;
+      this.initProgressBar();
+
+      // Only log initialization once
+      this.addLog('info', 'Application initialized');
+    },
+
+    initProgressBar() {
+      const progressBar = this.$refs.progressBar;
+      setInterval(() => {
+        if (this.isLoading || this.progress > 0) {
+          this.createParticle(progressBar);
+        }
+      }, 100);
+    },
+
+    createParticle(parent) {
+      const particle = document.createElement('div');
+      particle.classList.add('particle');
+      const size = Math.random() * 4 + 2;
+      particle.style.width = `${size}px`;
+      particle.style.height = `${size}px`;
+      particle.style.left = `${Math.random() * 100}%`;
+      particle.style.animation = `rise ${Math.random() * 1 + 0.5}s ease-out`;
+      parent.appendChild(particle);
+      setTimeout(() => particle.remove(), 1500);
+    },
+
+    logInteraction(event) {
+      let interactionInfo = '';
+      const element = event.target;
+      if (element.tagName === 'BUTTON') {
+        interactionInfo = element.textContent.trim() || element.getAttribute('aria-label') || 'Unknown button';
+      } else if (element.tagName === 'INPUT') {
+        interactionInfo = element.type + ' - ' + (element.id || element.name || 'Unnamed input');
+      } else if (element.tagName === 'SELECT') {
+        interactionInfo = 'Select - ' + (element.id || element.name || 'Unnamed select');
+      }
+      this.addLog('info', `User interacted with: ${element.tagName} - ${interactionInfo}`);
+    },
+
+    addLog(level, message, error = null) {
+      const timestamp = new Date().toLocaleString();
+      let logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+      
+      if (error) {
+        logEntry += ` - ${error}`;
+      }
+      
+      if (!this.loggedEntries.has(logEntry)) {
+        this.logs.push(logEntry);
+        this.loggedEntries.add(logEntry);
+        this.updateLogPopup(true);
+        console.log(logEntry);
+      }
+    },
+
+    toggleDarkMode() {
+      this.darkMode = !this.darkMode;
+      this.updateCharts();
+    },
+
+    changeFontSize() {
+      document.body.style.fontSize = this.fontSize + 'px';
+    },
+
+    checkUrlLimit() {
+      const urls = this.manualUrls.split('\n').filter(url => url.trim() !== '');
+      if (urls.length > this.maxManualUrls) {
+        alert(`You can only enter up to ${this.maxManualUrls} URLs manually. Please use file upload for larger sets.`);
+        this.manualUrls = urls.slice(0, this.maxManualUrls).join('\n');
+      }
+    },
+
+    getUrlCount() {
+      return this.manualUrls.split('\n').filter(url => url.trim() !== '').length;
+    },
+
+    submitForm(event) {
+      event.preventDefault();
+      if (this.getUrlCount() > this.maxManualUrls) {
+        alert(`You can only process up to ${this.maxManualUrls} URLs manually. Please use file upload for larger sets.`);
+        return;
+      }
+      this.isLoading = true;
+      this.error = '';
+      this.results = [];
+      this.summary = null;
+      this.uploadProgress = 0;
+      this.progress = 0;
+      this.errors = [];
+      this.hasErrors = false;
+      this.initLogging();
+
+      const formData = new FormData(event.target);
+      const fileInput = this.$refs.fileInput;
+      
+      if (fileInput.files.length > 0) {
+        this.isManualEntry = false;
+        // File upload logic
+        fetch('/', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            this.error = data.error;
+          } else {
+            this.startStreamingResults(data.total_urls);
+          }
+        })
+        .catch(error => {
+          this.error = 'An error occurred while processing the request.';
+          console.error('Error:', error);
+        })
+        .finally(() => {
+          this.isLoading = false;
+        });
+      } else if (this.manualUrls.trim() !== '') {
+        this.isManualEntry = true;
+        // Manual URL entry logic
+        const urls = this.manualUrls.split('\n').filter(url => url.trim() !== '');
+        fetch('/process_manual_urls', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ urls: urls, pass_name: this.passName }),
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            this.error = data.error;
+          } else {
+            this.startStreamingResults(data.total_urls);
+          }
+        })
+        .catch(error => {
+          this.error = 'An error occurred while processing the request.';
+          console.error('Error:', error);
+        })
+        .finally(() => {
+          this.isLoading = false;
+        });
+      } else {
+        this.error = 'Please either upload a file or enter URLs manually.';
+        this.isLoading = false;
+      }
+      
+      this.addLog('info', 'Form submitted');
+    },
+
+    startStreamingResults(totalUrls) {
+      console.log('Starting to stream results');
+      this.eventSource = new EventSource(this.isManualEntry ? '/stream_manual' : '/stream');
+      this.isLoading = true;
+      this.progress = 0;
+      this.errors = [];
+      this.hasErrors = false;
+      this.hasError = false;
+      this.errorProgress = 0;
+      
+      this.eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.result) {
+          console.log('Received result:', data.result);
+          this.results.push(data.result);
+          this.progress = Number(((this.results.length / totalUrls) * 100).toFixed(2));
+          this.filterResults();
+          this.updatePassFailCounts();
+          this.updatePaginationWithoutReset();
+
+          this.currentUrlHasError = !!data.result.Exception;
+          if (this.currentUrlHasError) {
+            const errorObj = {
+              sNo: this.errors.length + 1,
+              urlNo: data.result['S.No'],
+              url: data.result.URLS,
+              message: data.result.Exception
+            };
+            this.errors.push(errorObj);
+            this.hasErrors = true;
+          }
+          
+          let logMessage = `Processed URL: ${data.result.URLS} - ${data.result['Pass/Fail']}`;
+          if (data.result['Pass/Fail'] === 'Fail') {
+            logMessage += ` - ${data.result.Exception || 'Unknown error'}`;
+            this.addLog('error', logMessage);
+          } else {
+            this.addLog('info', logMessage);
+          }
+        } else if (data.summary) {
+          console.log('Received summary:', data.summary);
+          this.summary = data.summary;
+          this.progress = 100;
+          this.createCharts();
+          this.eventSource.close();
+          this.eventSource = null;
+          this.isLoading = false;
+          this.addLog('info', 'Processing completed');
+        }
+      };
+
+      this.eventSource.onerror = (error) => {
+        console.error('EventSource failed:', error);
+        this.errors.push('An error occurred while processing URLs. Please try again.');
+        this.hasErrors = true;
+        this.hasError = true;
+        this.errorProgress = this.progress;
+        this.eventSource.close();
+        this.eventSource = null;
+        this.isLoading = false;
+        this.addLog('error', `EventSource failed - ${error.message || 'Unknown error'}`);
+      };
+    },
+
+    clearForm() {
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
+      this.$refs.fileInput.value = '';
+      this.manualUrls = '';
+      this.passName = '';
+      this.results = [];
+      this.summary = null;
+      this.error = '';
+      this.uploadProgress = 0;
+      this.progress = 0;
+      this.errors = [];
+      this.hasErrors = false;
+      this.isLoading = false;
+      this.isManualEntry = false;
+      this.addLog('info', 'Form cleared');
+    },
+
+    filterResults() {
+      console.log('Filtering results');
+      this.filteredResults = this.results.filter(result => {
+        const matchesSearch = this.search === '' || 
+          result.URLS.toLowerCase().includes(this.search.toLowerCase()) || 
+          (result['Modified URLS'] && result['Modified URLS'].toLowerCase().includes(this.search.toLowerCase()));
+        const matchesStatus = this.status === '' || result['Pass/Fail'] === this.status;
+        return matchesSearch && matchesStatus;
+      });
+      this.updatePaginationWithoutReset();
+      console.log('Filtered results:', this.filteredResults);
+    },
+
+    updatePassFailCounts() {
+      this.passCount = this.filteredResults.filter(r => r['Pass/Fail'] === 'Pass').length;
+      this.failCount = this.filteredResults.filter(r => r['Pass/Fail'] === 'Fail').length;
+    },
+
+    sortResults(column) {
+      if (this.sortColumn === column) {
+        this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.sortColumn = column;
+        this.sortOrder = 'asc';
+      }
+      this.filteredResults.sort((a, b) => {
+        if (a[column] < b[column]) return this.sortOrder === 'asc' ? -1 : 1;
+        if (a[column] > b[column]) return this.sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+      this.updatePaginatedResults();
+    },
+
+    updatePaginationWithoutReset() {
+      console.log('Updating pagination');
+      const oldTotalPages = this.totalPages;
+      this.totalPages = Math.ceil(this.filteredResults.length / this.perPage);
+      
+      // If the number of pages has increased and we're on the last page, move to the new last page
+      if (this.totalPages > oldTotalPages && this.currentPage === oldTotalPages) {
+        this.currentPage = this.totalPages;
+      }
+      
+      // Ensure current page is within bounds
+      this.currentPage = Math.max(1, Math.min(this.currentPage, this.totalPages));
+      
+      this.updatePaginatedResults();
+      console.log('Pagination updated:', {
+        totalPages: this.totalPages,
+        currentPage: this.currentPage,
+        perPage: this.perPage
+      });
+      this.addLog('info', `Pagination updated: ${this.perPage} items per page, ${this.totalPages} total pages`);
+    },
+
+    updatePaginatedResults() {
+      console.log('Updating paginated results');
+      const start = (this.currentPage - 1) * this.perPage;
+      const end = start + parseInt(this.perPage);
+      this.paginatedResults = this.filteredResults.slice(start, end);
+      console.log('Paginated results:', this.paginatedResults);
+      this.$nextTick(() => {
+        // This forces Alpine to re-evaluate the table bindings
+        this.paginatedResults = [...this.paginatedResults];
+      });
+    },
+
+    getPaginationInfo() {
+      const start = (this.currentPage - 1) * this.perPage + 1;
+      const end = Math.min(this.currentPage * this.perPage, this.filteredResults.length);
+      const total = this.filteredResults.length;
+      return `Showing ${start} to ${end} of ${total}`;
+    },
+
+    getPassFailInfo() {
+      return `<span class="text-green-500">Pass: ${this.passCount}</span> | <span class="text-red-500">Fail: ${this.failCount}</span>`;
+    },
+
+    previousPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+        this.addLog('info', `Navigated to previous page: ${this.currentPage}`);
+        this.updatePaginatedResults();
+      }
+    },
+
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+        this.addLog('info', `Navigated to next page: ${this.currentPage}`);
+        this.updatePaginatedResults();
+      }
+    },
+
+    downloadFile(format) {
+      this.isDownloading[format] = true;
+      fetch('/download/' + format, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          results: this.results,
+          summary: this.summary
+        }),
+      }).then(response => response.blob())
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = 'results.' + (format === 'excel' ? 'xlsx' : format);
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          this.addLog('info', `Downloaded ${format.toUpperCase()} file`);
+        })
+        .catch(error => {
+          console.error('Error downloading file:', error);
+          this.error = 'An error occurred while downloading the file.';
+          this.addLog('error', `Error downloading ${format.toUpperCase()} file: ${error}`);
+        })
+        .finally(() => {
+          this.isDownloading[format] = false;
+        });
+    },
+
+    createCharts() {
+      console.log("Creating charts...");
+      console.log("Summary data:", this.summary);
+      
+      if (this.summary) {
+        this.$nextTick(() => {
+          this.createStatusChart();
+          this.createConnectionTimeChart();
+          this.displayExceptions();
+        });
+      } else {
+        console.log("No summary data available for charts");
+        this.addLog('warning', 'No summary data available for charts');
+      }
+    },
+
+    displayExceptions() {
+      const exceptionsContainer = document.getElementById('exceptionsContainer');
+      if (!exceptionsContainer) {
+        console.error("Exceptions container not found");
+        this.addLog('error', 'Exceptions container not found');
+        return;
+      }
+
+      exceptionsContainer.innerHTML = '';
+      if (this.summary.exceptions && Object.keys(this.summary.exceptions).length > 0) {
+        const ul = document.createElement('ul');
+        for (const [exception, count] of Object.entries(this.summary.exceptions)) {
+          const li = document.createElement('li');
+          li.textContent = `${exception}: ${count}`;
+          ul.appendChild(li);
+        }
+        exceptionsContainer.appendChild(ul);
+      } else {
+        exceptionsContainer.textContent = 'No exceptions occurred.';
+      }
+    },
+
+    getChartOptions(title) {
+      const textColor = this.darkMode ? '#ffffff' : '#000000';
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: textColor,
+              font: {
+                size: 14
+              }
+            }
+          },
+          title: {
+            display: true,
+            text: title,
+            color: textColor,
+            font: {
+              size: 18
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: textColor,
+              font: {
+                size: 12
+              }
+            },
+            grid: {
+              color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+            }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              color: textColor,
+              font: {
+                size: 12
+              }
+            },
+            grid: {
+              color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+            }
+          }
+        }
+      };
+    },
+
+    createStatusChart(isPopup = false) {
+      console.log("Creating status chart");
+      const ctx = isPopup ? document.getElementById('popupChart') : document.getElementById('statusChart');
+      if (!ctx) {
+        console.error("Chart canvas not found");
+        this.addLog('error', 'Chart canvas not found');
+        return;
+      }
+      
+      if (this.statusChart && !isPopup) {
+        this.statusChart.destroy();
+      }
+      
+      try {
+        const passCount = this.summary.pass || 0;
+        const failCount = this.summary.fail || 0;
+        const total = passCount + failCount;
+        
+        const chart = new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels: ['Pass', 'Fail'],
+            datasets: [{
+              data: [passCount, failCount],
+              backgroundColor: ['#10B981', '#EF4444']
+            }]
+          },
+          options: {
+            ...this.getChartOptions('SSL Check Status'),
+            plugins: {
+              ...this.getChartOptions('SSL Check Status').plugins,
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    const label = context.label;
+                    const value = context.raw;
+                    const percentage = ((value / total) * 100).toFixed(2);
+                    return `${label}: ${value} (${percentage}%)`;
+                  }
+                }
+              },
+              datalabels: {
+                color: '#ffffff',
+                font: { weight: 'bold', size: isPopup ? 16 : 12 },
+                formatter: (value, ctx) => {
+                  const label = ctx.chart.data.labels[ctx.dataIndex];
+                  const percentage = ((value / total) * 100).toFixed(2);
+                  return `${label}:\n${value}\n(${percentage}%)`;
+                },
+                anchor: 'center',
+                align: 'center',
+                offset: 0
+              }
+            }
+          },
+          plugins: [ChartDataLabels]
+        });
+
+        if (!isPopup) {
+          this.statusChart = chart;
+        }
+
+        console.log("Status chart created successfully");
+        this.addLog('info', 'Status chart created successfully');
+        return chart;
+      } catch (error) {
+        console.error("Error creating status chart:", error);
+        this.addLog('error', `Error creating status chart: ${error.message}`);
+      }
+    },
+
+    createConnectionTimeChart(isPopup = false) {
+      console.log("Creating connection time chart");
+      const ctx = isPopup ? document.getElementById('popupChart') : document.getElementById('connectionTimeChart');
+      if (!ctx) {
+        console.error("Connection time chart canvas not found");
+        this.addLog('error', 'Connection time chart canvas not found');
+        return;
+      }
+      
+      if (this.connectionTimeChart && !isPopup) {
+        this.connectionTimeChart.destroy();
+      }
+      
+      try {
+        const connectionTimes = this.results.map(r => r['Connection Time (ms)']);
+        const labels = this.results.map(r => r.URLS.substring(0, 15) + (r.URLS.length > 15 ? '...' : ''));
+        
+        const chart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Connection Time (ms)',
+              data: connectionTimes,
+              backgroundColor: '#3B82F6'
+            }]
+          },
+          options: {
+            ...this.getChartOptions('Connection Times'),
+            responsive: true,
+            maintainAspectRatio: false
+          }
+        });
+
+        if (!isPopup) {
+          this.connectionTimeChart = chart;
+        }
+
+        console.log("Connection time chart created successfully");
+        this.addLog('info', 'Connection time chart created successfully');
+        return chart;
+      } catch (error) {
+        console.error("Error creating connection time chart:", error);
+        this.addLog('error', `Error creating connection time chart: ${error.message}`);
+      }
+    },
+
+    updateCharts() {
+      this.$nextTick(() => {
+        const options = this.getChartOptions('');
+        if (this.statusChart) {
+          this.statusChart.options = { ...options, plugins: { ...options.plugins, title: { ...options.plugins.title, text: 'SSL Check Status' } } };
+          this.statusChart.update();
+        }
+        if (this.connectionTimeChart) {
+          this.connectionTimeChart.options = { ...options, plugins: { ...options.plugins, title: { ...options.plugins.title, text: 'Connection Times' } } };
+          this.connectionTimeChart.update();
+        }
+      });
+    },
+
+    resetCompare() {
+      this.selectedForComparison = [];
+      this.results.forEach(result => {
+        const checkbox = document.getElementById('compare-' + result['S.No']);
+        if (checkbox) checkbox.checked = false;
+      });
+      this.addLog('info', 'Comparison reset');
+    },
+
+    scrollToTop() {
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    },
+
+    showChartPopup(chartId) {
+      const modal = document.getElementById("chartModal");
+      const popupCanvas = document.getElementById("popupChart");
+      const ctx = popupCanvas.getContext('2d');
+      
+      // Clear previous chart
+      if (this.popupChart) {
+        this.popupChart.destroy();
+      }
+
+      // Set canvas dimensions
+      popupCanvas.width = modal.clientWidth * 0.9;
+      popupCanvas.height = modal.clientHeight * 0.8;
+
+      // Create a new chart instance for the popup
+      if (chartId === 'statusChart') {
+        this.popupChart = this.createStatusChart(true);
+      } else if (chartId === 'connectionTimeChart') {
+        this.popupChart = this.createConnectionTimeChart(true);
+      }
+
+      modal.style.display = "block";
+      this.addLog('info', `Opened ${chartId} popup`);
+    },
+
+    closeChartPopup() {
+      const modal = document.getElementById("chartModal");
+      modal.style.display = "none";
+      if (this.popupChart) {
+        this.popupChart.destroy();
+      }
+      this.addLog('info', 'Closed chart popup');
+    },
+
+    handleFileChange(event) {
+      const file = event.target.files[0];
+      if (file) {
+        console.log('File selected:', file.name);
+        this.addLog('info', `File selected: ${file.name}`);
+      }
+    },
+
+    updateUploadProgress(event) {
+      if (event.lengthComputable) {
+        this.uploadProgress = (event.loaded / event.total) * 100;
+        console.log('Upload progress:', this.uploadProgress.toFixed(2) + '%');
+        this.addLog('info', `Upload progress: ${this.uploadProgress.toFixed(2)}%`);
+      }
+    },
+
+    resetUploadProgress() {
+      this.uploadProgress = 0;
+    },
+
+    openErrorPopup() {
+      console.log('Opening error popup');
+      console.log('Number of errors:', this.errors.length);
+      const errorPopup = document.getElementById('errorPopup');
+      errorPopup.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      this.isErrorPopupOpen = true;
+      this.updateErrorPopup();
+      this.addLog('info', 'Opened error popup');
+    },
+
+    updateErrorPopup() {
+      const errorTable = document.getElementById('errorTable');
+      const errorTableBody = errorTable.querySelector('tbody');
+      
+      errorTableBody.innerHTML = '';
+      
+      this.errors.forEach((error) => {
+        const row = errorTableBody.insertRow();
+        const cellSNo = row.insertCell();
+        const cellURLNo = row.insertCell();
+        const cellURL = row.insertCell();
+        const cellMessage = row.insertCell();
+        
+        cellSNo.textContent = error.sNo;
+        cellURLNo.textContent = error.urlNo;
+        cellURL.textContent = error.url;
+        cellMessage.textContent = error.message;
+        
+        [cellSNo, cellURLNo, cellURL, cellMessage].forEach(cell => {
+          cell.className = 'border px-4 py-2';
+        });
+      });
+      
+      this.toggleUpArrow();
+    },
+
+    closeErrorPopup() {
+      console.log('Closing error popup');
+      const errorPopup = document.getElementById('errorPopup');
+      errorPopup.style.display = 'none';
+      document.body.style.overflow = '';
+      this.isErrorPopupOpen = false;
+      this.addLog('info', 'Closed error popup');
+    },
+
+    scrollErrorTableToTop() {
+      const errorTableContainer = document.querySelector('#errorPopup .overflow-auto');
+      errorTableContainer.scrollTop = 0;
+      this.toggleUpArrow();
+    },
+
+    toggleUpArrow() {
+      const errorTableContainer = document.querySelector('#errorPopup .overflow-auto');
+      const upArrow = document.getElementById('errorTableUpButton');
+      
+      if (errorTableContainer.scrollTop > 100) {
+        upArrow.style.display = 'block';
+      } else {
+        upArrow.style.display = 'none';
+      }
+    },
+
+    hasMoreThanFiveErrors() {
+      return this.errors.length > 5;
+    },
+
+    getDisplayErrors() {
+      return this.errors.slice(0, 5).map(err => 
+        `${err.url}: ${err.message}`
+      );
+    },
+
+    addLog(level, message) {
+      const timestamp = new Date().toLocaleString();
+      const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+      
+      if (!this.loggedEntries.has(logEntry)) {
+        this.logs.push(logEntry);
+        this.loggedEntries.add(logEntry);
+        this.updateLogPopup(true);
+        console.log(logEntry);
+      }
+    },
+
+    openLogPopup() {
+      const logPopup = document.getElementById('logPopup');
+      if (logPopup) {
+        logPopup.style.display = 'flex';
+        this.updateLogPopup(true);
+        this.addLog('info', 'Opened log popup');
+      } else {
+        console.error('Log popup element not found');
+      }
+    },
+
+    closeLogPopup() {
+      const logPopup = document.getElementById('logPopup');
+      if (logPopup) {
+        logPopup.style.display = 'none';
+        this.addLog('info', 'Closed log popup');
+      } else {
+        console.error('Log popup element not found');
+      }
+    },
+
+    updateLogPopup(scrollToBottom = false) {
+      const logContent = document.getElementById('logContent');
+      if (logContent) {
+        const isScrolledToBottom = logContent.scrollHeight - logContent.clientHeight <= logContent.scrollTop + 1;
+        
+        logContent.innerHTML = this.logs.map(log => {
+          const logClass = log.includes('[ERROR]') ? 'text-red-500' : '';
+          return `<div class="log-entry ${logClass}">${log}</div>`;
+        }).join('');
+        
+        this.$nextTick(() => {
+          if (scrollToBottom || (this.autoScrollLogs && isScrolledToBottom)) {
+            logContent.scrollTop = logContent.scrollHeight;
+          }
+          this.toggleLogUpArrow();
+        });
+      } else {
+        console.error('Log content element not found');
+      }
+    },
+
+    scrollLogToTop() {
+      const logContent = document.getElementById('logContent');
+      if (logContent) {
+        logContent.scrollTop = 0;
+        this.toggleLogUpArrow();
+      }
+    },
+
+    toggleLogUpArrow() {
+      const logContent = document.getElementById('logContent');
+      const upArrow = document.getElementById('logUpButton');
+      
+      if (logContent && upArrow) {
+        if (logContent.scrollTop > 100) {
+          upArrow.style.display = 'block';
+        } else {
+          upArrow.style.display = 'none';
+        }
+      } else {
+        console.error('Log content or up arrow element not found');
+      }
+    },
+
+    // New method to toggle auto-scrolling
+    toggleAutoScroll() {
+      this.autoScrollLogs = !this.autoScrollLogs;
+      this.addLog('info', `Auto-scroll ${this.autoScrollLogs ? 'enabled' : 'disabled'}`);
+    },
+
+    initLogging() {
+      this.addLog('info', 'Application initialized');
+    },
+
+    // Helper method to ensure all URLs are processed
+    ensureAllUrlsProcessed() {
+      if (this.results.length < this.totalUrls) {
+        console.warn(`Not all URLs processed. Expected: ${this.totalUrls}, Actual: ${this.results.length}`);
+        this.addLog('warning', `Not all URLs processed. Expected: ${this.totalUrls}, Actual: ${this.results.length}`);
+      }
+    },
+
+    // Method to handle window resize events
+    handleResize() {
+      if (this.statusChart) {
+        this.statusChart.resize();
+      }
+      if (this.connectionTimeChart) {
+        this.connectionTimeChart.resize();
+      }
+    },
+
+    // Method to clean up resources when the component is destroyed
+    cleanup() {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
+      if (this.statusChart) {
+        this.statusChart.destroy();
+      }
+      if (this.connectionTimeChart) {
+        this.connectionTimeChart.destroy();
+      }
+      window.removeEventListener('resize', this.handleResize);
+    }
+  };
+}
     </script>
   </body>
 </html>
