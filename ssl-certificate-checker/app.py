@@ -5,12 +5,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import ssl
 import socket
 import time
+import uuid
+from flask_session import Session
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.x509.oid import NameOID
-from flask import Flask, json, render_template, request, send_file, jsonify, Response, stream_with_context
+from flask import Flask, json, render_template, request, send_file, jsonify, Response, stream_with_context, session
 import pandas as pd
 from io import BytesIO
 import os
@@ -27,6 +29,9 @@ warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key')
+
+app.config['SESSION_TYPE'] = 'filesystem'
+Session(app)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -159,7 +164,7 @@ def get_certificate_details(url: str) -> CertificateInfo:
     except Exception as e:
         return CertificateInfo(False, "", "", "", "", "", handle_exception(e))
 
-def process_url(row, url, pass_name):
+def process_url(row, url, pass_name=''):
     original_url = url
     formatted_url = format_url(url)
     start_time = time.time()
@@ -168,7 +173,7 @@ def process_url(row, url, pass_name):
         end_time = time.time()
         connection_time = (end_time - start_time) * 1000
 
-        status = 'Pass' if cert_info.success and pass_name.lower() in cert_info.issuer_by.lower() else 'Fail'
+        status = 'Pass' if cert_info.success and (not pass_name or pass_name.lower() in cert_info.issuer_by.lower()) else 'Fail'
         
         result = {
             'S.No': row,
@@ -275,7 +280,12 @@ def index():
             
             if file and file.filename:
                 # File upload logic
-                df = pd.read_excel(file) if file.filename.endswith('.xlsx') else pd.read_csv(file)
+                if file.filename.endswith('.xlsx'):
+                    df = pd.read_excel(file)
+                elif file.filename.endswith('.csv'):
+                    df = pd.read_csv(file)
+                else:
+                    return jsonify({'error': 'Unsupported file format. Please upload .xlsx or .csv file.'}), 400
                 urls = df.iloc[:, 0].tolist()  # Assuming URLs are in the first column
             else:
                 # Check for manual URL entry
@@ -284,18 +294,23 @@ def index():
                     return jsonify({'error': 'Please either upload a file or enter URLs manually'}), 400
                 urls = [url.strip() for url in manual_urls.split('\n') if url.strip()]
 
-            # Store URLs and pass_name in session or a temporary storage
-            app.config['URLS'] = urls
-            app.config['PASS_NAME'] = pass_name
+            # Generate a unique session ID
+            session_id = str(uuid.uuid4())
+            
+            # Store URLs and pass_name in session
+            session[session_id] = {
+                'urls': urls,
+                'pass_name': pass_name
+            }
 
-            return jsonify({'message': 'Processing started', 'total_urls': len(urls)})
+            logger.info(f"Processing started for {len(urls)} URLs. Session ID: {session_id}")
+            return jsonify({'message': 'Processing started', 'total_urls': len(urls), 'session_id': session_id})
 
         except Exception as e:
             logger.exception(f"Error processing request: {str(e)}")
-            return jsonify({'error': f'Error processing request: {str(e)}\n{traceback.format_exc()}'}), 500
+            return jsonify({'error': f'Error processing request: {str(e)}'}), 500
 
     return render_template('index.html')
-
 
 @app.route('/process_manual_urls', methods=['POST'])
 def process_manual_urls():
@@ -307,16 +322,22 @@ def process_manual_urls():
         if not urls:
             return jsonify({'error': 'No URLs provided'}), 400
 
-        # Store URLs and pass_name in session or a temporary storage
-        app.config['URLS'] = urls
-        app.config['PASS_NAME'] = pass_name
+        # Generate a unique session ID
+        session_id = str(uuid.uuid4())
+        
+        # Store URLs and pass_name in session
+        session[session_id] = {
+            'urls': urls,
+            'pass_name': pass_name
+        }
 
-        return jsonify({'message': 'Processing started', 'total_urls': len(urls)})
+        logger.info(f"Processing started for {len(urls)} manually entered URLs. Session ID: {session_id}")
+        return jsonify({'message': 'Processing started', 'total_urls': len(urls), 'session_id': session_id})
 
     except Exception as e:
         logger.exception(f"Error processing manual URLs: {str(e)}")
-        return jsonify({'error': f'Error processing request: {str(e)}\n{traceback.format_exc()}'}), 500
-
+        return jsonify({'error': f'Error processing request: {str(e)}'}), 500
+    
 def process_url(row, url, pass_name=''):
     original_url = url
     formatted_url = format_url(url)
@@ -350,9 +371,15 @@ def process_url(row, url, pass_name=''):
     return result
 
 @app.route('/stream')
+@app.route('/stream_manual')
 def stream():
-    urls = app.config.get('URLS', [])
-    pass_name = app.config.get('PASS_NAME', '')
+    session_id = request.args.get('session_id')
+    if not session_id or session_id not in session:
+        return jsonify({'error': 'Invalid or expired session'}), 400
+
+    session_data = session[session_id]
+    urls = session_data.get('urls', [])
+    pass_name = session_data.get('pass_name', '')
 
     if not urls:
         return jsonify({'error': 'No data to process'}), 400
@@ -363,8 +390,11 @@ def stream():
             if 'complete' in result:
                 yield f"data: {json.dumps(result)}\n\n"
             else:
-                progress = (index / total_urls) * 100
+                progress = min((index / total_urls) * 100, 100)
                 yield f"data: {json.dumps({'result': result, 'progress': progress})}\n\n"
+        
+        # Clear session data after processing is complete
+        session.pop(session_id, None)
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
@@ -447,4 +477,4 @@ def download_file(format):
     )
 
 if __name__ == '__main__':
-     app.run()
+     app.run(host='0.0.0.0', port=5000)
