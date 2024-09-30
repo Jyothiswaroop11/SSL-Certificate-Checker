@@ -270,23 +270,24 @@ def summarize_results(results: List[Dict[str, Any]], start_time: float, end_time
 def index():
     if request.method == 'POST':
         try:
+            pass_name = request.form.get('pass_name', '')
             file = request.files.get('file')
-            pass_name = request.form.get('pass_name')
             
-            if not file:
-                return jsonify({'error': 'No file uploaded'}), 400
-            
-            if not pass_name:
-                return jsonify({'error': 'PASS_NAME is required'}), 400
-
-            df = pd.read_excel(file) if file.filename.endswith('.xlsx') else pd.read_csv(file)
-            urls = df.iloc[:, 0].tolist()  # Assuming URLs are in the first column
+            if file and file.filename:
+                # File upload logic
+                df = pd.read_excel(file) if file.filename.endswith('.xlsx') else pd.read_csv(file)
+                urls = df.iloc[:, 0].tolist()  # Assuming URLs are in the first column
+            else:
+                # Check for manual URL entry
+                manual_urls = request.form.get('manualUrls')
+                if not manual_urls:
+                    return jsonify({'error': 'Please either upload a file or enter URLs manually'}), 400
+                urls = [url.strip() for url in manual_urls.split('\n') if url.strip()]
 
             # Store URLs and pass_name in session or a temporary storage
             app.config['URLS'] = urls
             app.config['PASS_NAME'] = pass_name
 
-            urls = df.iloc[:, 0].tolist()
             return jsonify({'message': 'Processing started', 'total_urls': len(urls)})
 
         except Exception as e:
@@ -296,12 +297,83 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/process_manual_urls', methods=['POST'])
+def process_manual_urls():
+    try:
+        data = request.json
+        urls = data.get('urls', [])
+        pass_name = data.get('pass_name', '')
+        
+        if not urls:
+            return jsonify({'error': 'No URLs provided'}), 400
+
+        # Store URLs and pass_name in session or a temporary storage
+        app.config['URLS'] = urls
+        app.config['PASS_NAME'] = pass_name
+
+        return jsonify({'message': 'Processing started', 'total_urls': len(urls)})
+
+    except Exception as e:
+        logger.exception(f"Error processing manual URLs: {str(e)}")
+        return jsonify({'error': f'Error processing request: {str(e)}\n{traceback.format_exc()}'}), 500
+
+def process_url(row, url, pass_name=''):
+    original_url = url
+    formatted_url = format_url(url)
+    start_time = time.time()
+    try:
+        cert_info = get_certificate_details(formatted_url)
+        end_time = time.time()
+        connection_time = (end_time - start_time) * 1000
+
+        status = 'Pass' if cert_info.success and (not pass_name or pass_name.lower() in cert_info.issuer_by.lower()) else 'Fail'
+        
+        result = {
+            'S.No': row,
+            'URLS': original_url,
+            'Modified URLS': formatted_url,
+            'Pass/Fail': status,
+            'Connection Time (ms)': round(connection_time, 2),
+            **cert_info.to_dict()
+        }
+    except Exception as e:
+        result = {
+            'S.No': row,
+            'URLS': original_url,
+            'Modified URLS': formatted_url,
+            'Pass/Fail': 'Fail',
+            'Connection Time (ms)': 'N/A',
+            'Success': False,
+            'Exception': str(e)
+        }
+    
+    return result
+
 @app.route('/stream')
 def stream():
     urls = app.config.get('URLS', [])
     pass_name = app.config.get('PASS_NAME', '')
 
-    if not urls or not pass_name:
+    if not urls:
+        return jsonify({'error': 'No data to process'}), 400
+
+    def generate():
+        total_urls = len(urls)
+        for index, result in enumerate(process_urls_in_order(urls, pass_name), 1):
+            if 'complete' in result:
+                yield f"data: {json.dumps(result)}\n\n"
+            else:
+                progress = (index / total_urls) * 100
+                yield f"data: {json.dumps({'result': result, 'progress': progress})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+@app.route('/stream_manual')
+def stream_manual():
+    urls = app.config.get('URLS', [])
+    pass_name = app.config.get('PASS_NAME', '')
+
+    if not urls:
         return jsonify({'error': 'No data to process'}), 400
 
     def generate():
@@ -375,4 +447,4 @@ def download_file(format):
     )
 
 if __name__ == '__main__':
-    app.run()
+     app.run()
